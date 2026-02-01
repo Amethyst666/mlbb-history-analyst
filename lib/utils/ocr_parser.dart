@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,128 +20,157 @@ class PlayerDetection {
   PlayerDetection({required this.stats, required this.heroRect, required this.itemRects});
 }
 
+Future<List<int>> _prepareImageInIsolate(List<int> bytes) async {
+  final rawImage = img.decodeImage(Uint8List.fromList(bytes));
+  if (rawImage == null) return [];
+  final image = img.bakeOrientation(rawImage);
+  var processed = img.copyResize(image, width: image.width * 2, interpolation: img.Interpolation.linear);
+  processed = img.invert(img.grayscale(processed));
+  return img.encodePng(processed);
+}
+
 class OcrParser {
-  static final textRecognizer = TextRecognizer();
+  static final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
   static Future<OcrResult?> parseWithCropping(File imageFile) async {
     final bytes = await imageFile.readAsBytes();
-    final rawImage = img.decodeImage(bytes);
-    if (rawImage == null) return null;
-    final image = img.bakeOrientation(rawImage);
+    final processedBytes = await compute(_prepareImageInIsolate, bytes);
+    if (processedBytes.isEmpty) return null;
 
-    final w = image.width;
-    final h = image.height;
+    final tempFile = File('${Directory.systemTemp.path}/full_ocr.png');
+    await tempFile.writeAsBytes(processedBytes);
+    
+    final info = img.decodeImage(bytes); 
+    if (info == null) return null;
+    final w = info.width;
+    final h = info.height;
+
     final prefs = await SharedPreferences.getInstance();
-
     Map<int, Rect> calib = {};
-    for (int i = 1; i <= 27; i++) {
+    for (int i = 1; i <= 28; i++) {
       double? l = prefs.getDouble('calib_${i}_l');
       double? t = prefs.getDouble('calib_${i}_t');
       double? r = prefs.getDouble('calib_${i}_r');
       double? b = prefs.getDouble('calib_${i}_b');
       if (l != null) calib[i] = Rect.fromLTRB(l, t!, r!, b!);
     }
-
     if (calib.isEmpty) return null;
 
-    Rect getRelRect(Rect parent, Rect rel) {
-      double l = (parent.left + (rel.left * parent.width)) * w;
-      double t = (parent.top + (rel.top * parent.height)) * h;
-      double width = (rel.width * parent.width) * w;
-      double height = (rel.height * parent.height) * h;
-      return Rect.fromLTWH(l, t, width, height);
+    final recognizedText = await textRecognizer.processImage(InputImage.fromFile(tempFile));
+    
+    List<RecognizedTextElement> allElements = [];
+    for (var block in recognizedText.blocks) {
+      for (var line in block.lines) {
+        for (var el in line.elements) {
+          allElements.add(RecognizedTextElement(
+            text: el.text,
+            relL: el.boundingBox.left / (w * 2),
+            relT: el.boundingBox.top / (h * 2),
+            relW: el.boundingBox.width / (w * 2),
+            relH: el.boundingBox.height / (h * 2),
+          ));
+        }
+      }
     }
 
-    // 1. Общие данные
-    Rect resR = calib[1]!;
-    String gameResult = await _readZone(await _processZone(image, Rect.fromLTWH(resR.left * w, resR.top * h, resR.width * w, resR.height * h)));
-    
+    String gameResult = _cleanResult(_findTextInZone(allElements, calib[1]!));
+    String duration = _cleanDuration(_findTextInZone(allElements, calib[28]!));
+    if (duration.isEmpty) duration = "00:00";
+
     List<PlayerDetection> playersList = [];
 
-    // 2. Парсинг игроков
     for (int team = 0; team < 2; team++) {
-      int teamStep = team == 0 ? 2 : 3;
-      Rect teamZone = calib[teamStep]!;
-      double rowH = teamZone.height / 5;
       int baseS = team == 0 ? 4 : 16;
-      int itemStartS = team == 0 ? 9 : 21;
+      Rect teamZone = calib[team == 0 ? 2 : 3]!;
+      double rowH = teamZone.height / 5;
 
       for (int i = 0; i < 5; i++) {
         double rowT = teamZone.top + (i * rowH);
         Rect rowR = Rect.fromLTWH(teamZone.left, rowT, teamZone.width, rowH);
-
-        // NICKNAME
-        String nick = _cleanNickname(await _readZone(await _processZone(image, getRelRect(rowR, calib[baseS + 1]!))));
-
-        // KDA SPLIT
-        Rect kdaR = getRelRect(rowR, calib[baseS + 2]!);
-        double sw = kdaR.width / 3;
-        String k = _cleanDigits(await _readZone(await _processZone(image, Rect.fromLTWH(kdaR.left, kdaR.top, sw, kdaR.height), isDigit: true)));
-        String d = _cleanDigits(await _readZone(await _processZone(image, Rect.fromLTWH(kdaR.left + sw, kdaR.top, sw, kdaR.height), isDigit: true)));
-        String a = _cleanDigits(await _readZone(await _processZone(image, Rect.fromLTWH(kdaR.left + sw * 2, kdaR.top, sw, kdaR.height), isDigit: true)));
         
-        // GOLD & SCORE
-        String gold = _cleanDigits(await _readZone(await _processZone(image, getRelRect(rowR, calib[baseS + 3]!), isDigit: true)));
-        String score = _cleanScore(await _readZone(await _processZone(image, getRelRect(rowR, calib[baseS + 4]!), isDigit: true)));
+        Map<String, Rect> rowTargets = {
+          'nick': _getAbsTarget(rowR, calib[baseS + 1]!),
+          'k': _getAbsTarget(rowR, _getKdaSubZone(calib[baseS + 2]!, 0)),
+          'd': _getAbsTarget(rowR, _getKdaSubZone(calib[baseS + 2]!, 1)),
+          'a': _getAbsTarget(rowR, _getKdaSubZone(calib[baseS + 2]!, 2)),
+          'gold': _getAbsTarget(rowR, calib[baseS + 3]!),
+          'score': _getAbsTarget(rowR, calib[baseS + 4]!),
+        };
+
+        Map<String, List<String>> bucket = {'nick':[], 'k':[], 'd':[], 'a':[], 'gold':[], 'score':[]};
+        var rowElements = allElements.where((e) => e.relY >= rowR.top && e.relY <= rowR.bottom);
+
+        for (var el in rowElements) {
+          // ЕСЛИ БЛОК ПЕРЕСЕКАЕТ НЕСКОЛЬКО ЗОН ИЛИ СОДЕРЖИТ ЦИФРЫ - РАСЩЕПЛЯЕМ ЕГО
+          bool spansMultiple = false;
+          int zonesHit = 0;
+          rowTargets.values.forEach((z) { if (Rect.fromLTWH(el.relL, el.relT, el.relW, el.relH).overlaps(z)) zonesHit++; });
+          if (zonesHit > 1 || RegExp(r'[0-9]').hasMatch(el.text)) spansMultiple = true;
+
+          if (spansMultiple && el.text.length > 1) {
+            double charW = el.relW / el.text.length;
+            for (int cIdx = 0; cIdx < el.text.length; cIdx++) {
+              double cx = el.relL + (cIdx + 0.5) * charW;
+              _distribute(el.text[cIdx], cx, el.relY, rowTargets, bucket);
+            }
+          } else {
+            _distribute(el.text, el.relX, el.relY, rowTargets, bucket);
+          }
+        }
 
         playersList.add(PlayerDetection(
           stats: PlayerStats(
-            nickname: nick.isEmpty ? "Unknown" : nick, hero: 'unknown',
-            kda: "${k.isEmpty ? '0' : k}/${d.isEmpty ? '0' : d}/${a.isEmpty ? '0' : a}",
-            gold: gold.isEmpty ? "0" : gold, items: '', score: score.isEmpty ? "0.0" : score,
-            isEnemy: team == 1, isUser: false,
+            nickname: _cleanNickname(bucket['nick']!.join(" ")),
+            hero: 'unknown',
+            kda: "${_cleanDigits(bucket['k']!.join(""))}/${_cleanDigits(bucket['d']!.join(""))}/${_cleanDigits(bucket['a']!.join(""))}",
+            gold: _cleanDigits(bucket['gold']!.join("")),
+            items: '',
+            score: _cleanScore(bucket['score']!.join("")),
+            isEnemy: team == 1,
+            isUser: false,
           ),
-          heroRect: getRelRect(rowR, calib[baseS]!),
-          itemRects: List.generate(7, (j) => getRelRect(rowR, calib[itemStartS + j]!)),
+          heroRect: _getGlobalRect(rowR, calib[baseS]!, w, h),
+          itemRects: List.generate(7, (j) => _getGlobalRect(rowR, calib[team == 0 ? 9 + j : 21 + j]!, w, h)),
         ));
       }
     }
-
-    return OcrResult(result: gameResult.toUpperCase().contains('VIC') ? 'VICTORY' : 'DEFEAT', duration: "15:00", players: playersList);
+    return OcrResult(result: gameResult.contains('VIC') ? 'VICTORY' : 'DEFEAT', duration: duration, players: playersList);
   }
 
-  static Future<File> _processZone(img.Image source, Rect rect, {bool isDigit = false}) async {
-    int x = rect.left.toInt().clamp(0, source.width - 1);
-    int y = rect.top.toInt().clamp(0, source.height - 1);
-    int width = rect.width.toInt().clamp(1, source.width - x);
-    int height = rect.height.toInt().clamp(1, source.height - y);
-
-    var cropped = img.copyCrop(source, x: x, y: y, width: width, height: height);
-    
-    // 1. Увеличение 3x
-    var processed = img.copyResize(cropped, width: cropped.width * 3, interpolation: img.Interpolation.cubic);
-    
-    // 2. ИНВЕРСИЯ: Делаем ЧЕРНЫЙ текст на БЕЛОМ фоне (самый читаемый формат для ML Kit)
-    processed = img.grayscale(processed);
-    processed = img.invert(processed); // Теперь цифры черные, фон белый
-    processed = img.adjustColor(processed, contrast: 1.5, brightness: 1.2);
-
-    // 3. ДОБАВЛЕНИЕ ПОЛЕЙ (Padding) - чтобы OCR не терял края
-    int pad = 20;
-    var padded = img.Image(width: processed.width + pad * 2, height: processed.height + pad * 2);
-    img.fill(padded, color: img.ColorRgb8(255, 255, 255)); // Белый фон
-    img.compositeImage(padded, processed, dstX: pad, dstY: pad);
-
-    final file = File('${Directory.systemTemp.path}/ocr_${DateTime.now().microsecondsSinceEpoch}.png');
-    await file.writeAsBytes(img.encodePng(padded));
-    return file;
+  static void _distribute(String text, double x, double y, Map<String, Rect> targets, Map<String, List<String>> bucket) {
+    Offset point = Offset(x, y);
+    String? bestKey;
+    double minD = 999;
+    targets.forEach((key, zone) {
+      if (zone.contains(point)) {
+        double d = (x - zone.center.dx).abs();
+        if (d < minD) { minD = d; bestKey = key; }
+      }
+    });
+    if (bestKey != null) bucket[bestKey!]!.add(text);
   }
 
-  static Future<String> _readZone(File file) async {
-    final inputImage = InputImage.fromFile(file);
-    final recognizedText = await textRecognizer.processImage(inputImage);
-    return recognizedText.text.trim();
+  static String _findTextInZone(List<RecognizedTextElement> elements, Rect zone) {
+    var matches = elements.where((e) => zone.contains(Offset(e.relX, e.relY))).toList();
+    matches.sort((a, b) => a.relX.compareTo(b.relX));
+    return matches.map((e) => e.text).join(" ");
   }
 
-  static String _cleanNickname(String raw) => raw.replaceAll(RegExp(r'(MVP|SVP|Lv\.\d+|Level \d+)', caseSensitive: false), '').trim();
+  static Rect _getAbsTarget(Rect row, Rect rel) => Rect.fromLTWH(row.left + rel.left * row.width, row.top + rel.top * row.height, rel.width * row.width, rel.height * row.height);
+  static Rect _getKdaSubZone(Rect kda, int p) => Rect.fromLTWH(kda.left + (kda.width / 3) * p, kda.top, kda.width / 3, kda.height);
+  static Rect _getGlobalRect(Rect row, Rect rel, int w, int h) => Rect.fromLTWH((row.left + rel.left * row.width) * w, (row.top + rel.top * row.height) * h, rel.width * row.width * w, rel.height * row.height * h);
+  
+  static String _cleanResult(String r) => r.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
+  static String _cleanNickname(String r) => r.replaceAll(RegExp(r'(MVP|SVP|Lv\.\d+|Level \d+)', caseSensitive: false), '').trim();
+  static String _cleanDigits(String r) => r.toUpperCase().replaceAll('O', '0').replaceAll('D', '0').replaceAll('I', '1').replaceAll(RegExp(r'[^0-9]'), '');
+  static String _cleanScore(String r) => r.toUpperCase().replaceAll('O', '0').replaceAll(',', '.').replaceAll(RegExp(r'[^0-9.]'), '');
+  static String _cleanDuration(String r) => r.toUpperCase().replaceAll('O', '0').replaceAll('.', ':').replaceAll(RegExp(r'[^0-9:]'), '').trim();
+}
 
-  static String _cleanDigits(String raw) {
-    String clean = raw.toUpperCase().replaceAll('O', '0').replaceAll('D', '0').replaceAll('I', '1').replaceAll('L', '1');
-    return clean.replaceAll(RegExp(r'[^0-9]'), '');
-  }
-
-  static String _cleanScore(String raw) {
-    String clean = raw.toUpperCase().replaceAll('O', '0').replaceAll(',', '.');
-    return clean.replaceAll(RegExp(r'[^0-9.]'), '');
-  }
+class RecognizedTextElement {
+  final String text;
+  final double relL, relT, relW, relH;
+  RecognizedTextElement({required this.text, required this.relL, required this.relT, required this.relW, required this.relH});
+  double get relX => relL + relW / 2;
+  double get relY => relT + relH / 2;
 }

@@ -111,8 +111,22 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                   fontWeight: FontWeight.bold,
                   color: noUser ? Colors.grey : Colors.white,
                 )),
-            subtitle: Text(
-                noUser ? game.date.toString().substring(0, 16) : '${AppStrings.get(context, 'kda')}: ${game.kda}\n${game.date.toString().substring(0, 16)}'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!noUser) ...[
+                  Text('${AppStrings.get(context, 'kda')}: ${game.kda}'),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 4,
+                    children: game.items.split(',').where((i) => i.isNotEmpty).map((item) => 
+                      SizedBox(width: 20, height: 20, child: DataUtils.getItemIcon(item, size: 20))
+                    ).toList(),
+                  ),
+                ] else
+                  Text(game.date.toString().substring(0, 10)), // Keep only date for games without me
+              ],
+            ),
             isThreeLine: !noUser,
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,

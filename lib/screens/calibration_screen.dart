@@ -16,13 +16,12 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   File? _image;
   final picker = ImagePicker();
   int _currentStep = 0;
-  static const int totalSteps = 27;
+  static const int totalSteps = 28;
 
   Map<int, Rect> _zones = {
     1: const Rect.fromLTRB(0.3, 0.05, 0.7, 0.15), 
     2: const Rect.fromLTRB(0.05, 0.2, 0.45, 0.9), 
     3: const Rect.fromLTRB(0.55, 0.2, 0.95, 0.9), 
-    // Defaults for details will be filled in load
   };
 
   Offset? _startPoint;
@@ -44,7 +43,6 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         double? b = prefs.getDouble('calib_${i}_b');
         if (l != null) _zones[i] = Rect.fromLTRB(l, t!, r!, b!);
         else if (!_zones.containsKey(i)) {
-          // Default empty rect if never calibrated
           _zones[i] = const Rect.fromLTRB(0.45, 0.45, 0.55, 0.55);
         }
       }
@@ -93,7 +91,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     Rect drawn = Rect.fromPoints(_startPoint!, Offset(px, py));
 
     setState(() {
-      if (_currentStep >= 4) {
+      if (_currentStep >= 4 && _currentStep <= 27) {
         int teamIdx = _currentStep <= 15 ? 2 : 3;
         Rect teamZone = _zones[teamIdx]!;
         double rowH = teamZone.height / 5;
@@ -199,7 +197,7 @@ class _ActiveZonePainter extends StatelessWidget {
   Widget build(BuildContext context) {
     double w = constraints.maxWidth;
     double h = constraints.maxHeight;
-    int teamIdx = (step >= 4 && step <= 15) ? 2 : (step >= 16 ? 3 : 0);
+    int teamIdx = (step >= 4 && step <= 15) ? 2 : (step >= 16 && step <= 27 ? 3 : 0);
     
     Rect drawRect;
     if (teamIdx != 0) {
@@ -215,7 +213,7 @@ class _ActiveZonePainter extends StatelessWidget {
       drawRect = currentRect;
     }
 
-    bool isCircle = (step == 4 || step == 16) || (step >= 9 && step <= 15) || (step >= 21);
+    bool isCircle = (step == 4 || step == 16) || (step >= 9 && step <= 15) || (step >= 21 && step <= 27);
 
     return Stack(
       children: [

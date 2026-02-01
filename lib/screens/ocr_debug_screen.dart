@@ -36,7 +36,7 @@ class _OcrDebugScreenState extends State<OcrDebugScreen> {
   Future<void> _loadCalib() async {
     final prefs = await SharedPreferences.getInstance();
     Map<String, double> data = {};
-    for (int i = 1; i <= 27; i++) {
+    for (int i = 1; i <= 28; i++) {
       data['calib_${i}_l'] = prefs.getDouble('calib_${i}_l') ?? 0.0;
       data['calib_${i}_t'] = prefs.getDouble('calib_${i}_t') ?? 0.0;
       data['calib_${i}_r'] = prefs.getDouble('calib_${i}_r') ?? 0.0;
@@ -88,10 +88,11 @@ class _DebugOverlay extends StatelessWidget {
       List<Widget> overlays = [];
 
       overlays.add(_box(1, w, h, Colors.white));
+      overlays.add(_box(28, w, h, Colors.yellowAccent)); // Duration
 
-      // Левая команда: 4-8 (текст), 9-15 (предметы)
+      // Левая команда
       overlays.addAll(_team(2, [4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15], w, h));
-      // Правая команда: 16-20 (текст), 21-27 (предметы)
+      // Правая команда
       overlays.addAll(_team(3, [16, 17, 18, 19, 20], [21, 22, 23, 24, 25, 26, 27], w, h));
 
       return Stack(children: overlays);
