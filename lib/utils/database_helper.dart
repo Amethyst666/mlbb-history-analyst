@@ -29,7 +29,6 @@ class DatabaseHelper {
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
-        // ПРИНУДИТЕЛЬНАЯ МИГРАЦИЯ: если колонка потерялась при сбое версии
         var tableInfo = await db.rawQuery('PRAGMA table_info(player_profiles)');
         bool hasVerified = tableInfo.any((column) => column['name'] == 'is_verified');
         if (!hasVerified) {
@@ -132,10 +131,7 @@ class DatabaseHelper {
         Map<String, dynamic> updates = {};
         if (sourceInfo.first['is_user'] == 1) updates['is_user'] = 1;
         if (sourceInfo.first['is_verified'] == 1) updates['is_verified'] = 1;
-        
-        if (updates.isNotEmpty) {
-          await txn.update('player_profiles', updates, where: 'id = ?', whereArgs: [targetProfileId]);
-        }
+        if (updates.isNotEmpty) await txn.update('player_profiles', updates, where: 'id = ?', whereArgs: [targetProfileId]);
       }
       await txn.delete('player_profiles', where: 'id = ?', whereArgs: [sourceProfileId]);
     });
@@ -161,15 +157,44 @@ class DatabaseHelper {
 
   Future<List<PlayerProfile>> getAllProfiles() async {
     Database db = await database;
-    // ЯВНОЕ ПЕРЕЧИСЛЕНИЕ КОЛОНОК для предотвращения CursorWindow ошибки
     final maps = await db.rawQuery('''
       SELECT id, main_nickname, is_user, is_verified 
       FROM player_profiles 
       WHERE (id IN (SELECT DISTINCT profile_id FROM player_nicknames) OR is_user = 1)
-      GROUP BY LOWER(main_nickname)
+      GROUP BY id
       ORDER BY id DESC
     ''');
     return maps.map((m) => PlayerProfile.fromMap(m)).toList();
+  }
+
+  Future<List<PlayerProfile>> searchProfilesByAnyNickname(String query) async {
+    Database db = await database;
+    final String q = '%${query.toLowerCase()}%';
+    final maps = await db.rawQuery('''
+      SELECT p.id, p.main_nickname, p.is_user, p.is_verified
+      FROM player_profiles p
+      WHERE p.id IN (
+        SELECT profile_id FROM player_nicknames WHERE LOWER(nickname) LIKE ?
+      ) OR LOWER(p.main_nickname) LIKE ?
+      GROUP BY p.id
+      ORDER BY p.id DESC
+    ''', [q, q]);
+    return maps.map((m) => PlayerProfile.fromMap(m)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> searchOtherProfilesForMerge(int excludeId, String query) async {
+    Database db = await database;
+    final String q = '%${query.toLowerCase()}%';
+    return await db.rawQuery('''
+      SELECT id, main_nickname 
+      FROM player_profiles 
+      WHERE id != ? AND (
+        id IN (SELECT profile_id FROM player_nicknames WHERE LOWER(nickname) LIKE ?)
+        OR LOWER(main_nickname) LIKE ?
+      )
+      GROUP BY id
+      ORDER BY main_nickname ASC
+    ''', [excludeId, q, q]);
   }
 
   Future<List<Map<String, dynamic>>> getOtherMainNicknames(int excludeId) async {
@@ -202,6 +227,38 @@ class DatabaseHelper {
     });
     updateNotifier.notifyListeners();
     return count;
+  }
+
+  // НОВОЕ: Статистика героев для профиля
+  Future<List<Map<String, dynamic>>> getHeroStatsForProfile(int profileId) async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        gp.hero,
+        COUNT(CASE WHEN gp.is_enemy = 0 THEN 1 END) as ally_games,
+        COUNT(CASE WHEN gp.is_enemy = 0 AND g.result = 'VICTORY' THEN 1 END) as ally_wins,
+        COUNT(CASE WHEN gp.is_enemy = 1 THEN 1 END) as enemy_games,
+        COUNT(CASE WHEN gp.is_enemy = 1 AND g.result = 'DEFEAT' THEN 1 END) as enemy_wins
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
+      WHERE gp.profile_id = ?
+      GROUP BY gp.hero
+      ORDER BY (COUNT(gp.id)) DESC
+    ''', [profileId]);
+  }
+
+  // НОВОЕ: Все игры игрока с его личными данными
+  Future<List<Map<String, dynamic>>> getGamesForProfile(int profileId) async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT g.*, gp.hero as player_hero, gp.kda as player_kda, gp.items as player_items, 
+             gp.score as player_score, gp.role as player_role, gp.spell as player_spell,
+             gp.is_enemy as player_is_enemy
+      FROM games g
+      JOIN game_players gp ON g.id = gp.game_id
+      WHERE gp.profile_id = ?
+      ORDER BY g.date DESC
+    ''', [profileId]);
   }
 
   Future<List<PlayerStats>> getPlayersForGame(int gameId) async {

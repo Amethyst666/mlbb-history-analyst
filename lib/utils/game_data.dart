@@ -247,6 +247,7 @@ class GameData {
     GameEntity(id: 'steel_legplates', en: 'Steel Legplates', ru: 'Стальные Поножи', category: 'defense', tier: 2),
     GameEntity(id: 'heros_ring', en: 'Hero\'s Ring', ru: 'Кольцо Героя', category: 'defense', tier: 2),
 
+    GameEntity(id: 'chastise_pauldron', en: 'Chastise Pauldron', ru: 'Плащ Наказания', category: 'defense', tier: 3),
     GameEntity(id: 'radiant_armor', en: 'Radiant Armor', ru: 'Сияющая Броня', category: 'defense'),     GameEntity(id: 'twilight_armor', en: 'Twilight Armor', ru: 'Сумеречная Броня', category: 'defense'),
     GameEntity(id: 'brute_force_breastplate', en: 'Brute Force Breastplate', ru: 'Кираса Грубой Силы', category: 'defense'),
     GameEntity(id: 'immortality', en: 'Immortality', ru: 'Бессмертие', category: 'defense'),

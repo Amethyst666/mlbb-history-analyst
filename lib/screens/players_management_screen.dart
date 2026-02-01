@@ -38,13 +38,18 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
     super.dispose();
   }
 
-  void _onSearchChanged() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredProfiles = _profiles.where((p) {
-        return p.mainNickname.toLowerCase().contains(query);
-      }).toList();
-    });
+  // ОБНОВЛЕНО: Поиск по всем именам в БД
+  void _onSearchChanged() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      setState(() => _filteredProfiles = _profiles);
+      return;
+    }
+    
+    final results = await _dbHelper.searchProfilesByAnyNickname(query);
+    if (mounted) {
+      setState(() => _filteredProfiles = results);
+    }
   }
 
   Future<void> _loadProfiles() async {
@@ -54,7 +59,6 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
     if (mounted) {
       setState(() {
         _profiles = profiles;
-        _filteredProfiles = profiles;
         _isLoading = false;
       });
       _onSearchChanged();
@@ -62,8 +66,9 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
   }
 
   void _showAliasManagementDialog(PlayerProfile profile) async {
-    final List<String> currentNicks = await _dbHelper.getNicknamesForProfile(profile.id!);
-    final List<Map<String, dynamic>> otherProfiles = await _dbHelper.getOtherMainNicknames(profile.id!);
+    List<String> currentNicks = await _dbHelper.getNicknamesForProfile(profile.id!);
+    List<Map<String, dynamic>> searchResults = [];
+    
     final newAliasController = TextEditingController();
 
     if (!mounted) return;
@@ -73,10 +78,20 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(builder: (stCtx, setModalState) {
-        final input = newAliasController.text.toLowerCase().trim();
-        final filteredOtherProfiles = otherProfiles.where((p) {
-          return (p['main_nickname'] as String).toLowerCase().contains(input);
-        }).toList();
+        
+        // Внутренняя функция для обновления списка внутри модалки
+        Future<void> refreshLocalState() async {
+          final updatedNicks = await _dbHelper.getNicknamesForProfile(profile.id!);
+          final input = newAliasController.text.trim();
+          List<Map<String, dynamic>> results = [];
+          if (input.isNotEmpty) {
+            results = await _dbHelper.searchOtherProfilesForMerge(profile.id!, input);
+          }
+          setModalState(() {
+            currentNicks = updatedNicks;
+            searchResults = results;
+          });
+        }
 
         return Container(
           height: MediaQuery.of(ctx).size.height * 0.85,
@@ -111,12 +126,13 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
                     onPressed: () async {
                       if (!isMain) {
                         await _dbHelper.updateMainNickname(profile.id!, n);
-                        setModalState(() { profile.mainNickname = n; });
+                        profile.mainNickname = n;
+                        await refreshLocalState();
                       }
                     },
                     onDeleted: (canDelete && !isMain) ? () async {
                       await _dbHelper.detachNicknameFromProfile(n);
-                      Navigator.pop(ctx);
+                      await refreshLocalState(); // НЕ ЗАКРЫВАЕМ, а обновляем
                     } : null,
                     deleteIcon: Icon(Icons.cancel, size: 16, color: isMain ? Colors.black54 : Colors.white54),
                   );
@@ -128,7 +144,7 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
               const SizedBox(height: 10),
               TextField(
                 controller: newAliasController,
-                onChanged: (v) => setModalState(() {}),
+                onChanged: (v) => refreshLocalState(),
                 decoration: InputDecoration(
                   hintText: "Поиск игрока или ввод ника...",
                   suffixIcon: IconButton(
@@ -137,7 +153,8 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
                       final val = newAliasController.text.trim();
                       if (val.isNotEmpty) {
                         await _dbHelper.associateNicknameWithProfile(val, profile.id!);
-                        Navigator.pop(ctx);
+                        newAliasController.clear();
+                        await refreshLocalState(); // НЕ ЗАКРЫВАЕМ
                       }
                     },
                   ),
@@ -146,21 +163,25 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
               ),
               const SizedBox(height: 15),
               Expanded(
-                child: ListView.separated(
-                  itemCount: filteredOtherProfiles.length,
-                  separatorBuilder: (c, i) => const Divider(height: 1, color: Colors.white10),
-                  itemBuilder: (c, i) {
-                    final other = filteredOtherProfiles[i];
-                    return ListTile(
-                      title: Text(other['main_nickname']),
-                      trailing: const Icon(Icons.merge_type, color: Colors.cyanAccent, size: 20),
-                      onTap: () async {
-                        await _dbHelper.mergeProfiles(other['id'], profile.id!);
-                        Navigator.pop(ctx);
+                child: searchResults.isEmpty && newAliasController.text.isNotEmpty
+                  ? const Center(child: Text("Других игроков с таким ником не найдено", style: TextStyle(fontSize: 12, color: Colors.white24)))
+                  : ListView.separated(
+                      itemCount: searchResults.length,
+                      separatorBuilder: (c, i) => const Divider(height: 1, color: Colors.white10),
+                      itemBuilder: (c, i) {
+                        final other = searchResults[i];
+                        return ListTile(
+                          title: Text(other['main_nickname']),
+                          subtitle: const Text("Объединить профили", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          trailing: const Icon(Icons.merge_type, color: Colors.cyanAccent, size: 20),
+                          onTap: () async {
+                            await _dbHelper.mergeProfiles(other['id'], profile.id!);
+                            newAliasController.clear();
+                            await refreshLocalState(); // НЕ ЗАКРЫВАЕМ
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
               ),
             ],
           ),
@@ -183,7 +204,7 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> with 
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: AppStrings.get(context, 'search_hint'),
+                    hintText: "Поиск по нику или алиасу...",
                     prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                     filled: true,
