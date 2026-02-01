@@ -31,7 +31,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
   String? _userNickname;
 
   String gameResult = 'VICTORY';
-  String duration = '15:00';
+  String duration = '00:00';
   DateTime matchDate = DateTime.now();
 
   List<PlayerStats> myTeam = List.generate(5, (i) => PlayerStats(nickname: 'Player ${i + 1}', hero: 'unknown', kda: '0/0/0', gold: '0', items: '', score: '0.0', isEnemy: false, isUser: false, role: 'unknown', spell: 'none'));
@@ -46,7 +46,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
 
   Future<void> _loadUserSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _userNickname = prefs.getString('user_nickname'));
+    setState(() => _userNickname = prefs.getString('userNickname'));
   }
 
   Future<void> _loadInitialGame() async {
@@ -61,7 +61,6 @@ class _AddGameScreenState extends State<AddGameScreen> {
     });
   }
 
-  // РАСШИРЕННАЯ ПРОВЕРКА
   Map<String, String?> _checkSuspicious(PlayerStats p) {
     Map<String, String?> issues = {};
     final kdaParts = p.kda.split('/');
@@ -73,17 +72,11 @@ class _AddGameScreenState extends State<AddGameScreen> {
     }
     if (p.gold.isEmpty || p.gold == "0") issues['gold'] = "No gold";
     else if (p.gold.length < 4 || p.gold.length > 5) issues['gold'] = "Odd gold (${p.gold})";
-    
-    // Новое: проверка Score 0.0
     if (p.score == "0.0" || p.score == "0") issues['score'] = "Score missing";
     else if (!RegExp(r'^\d{1,2}\.\d$').hasMatch(p.score)) issues['score'] = "Score format error";
-
     if (p.hero == 'unknown') issues['hero'] = "Hero unknown";
-    
-    // Новое: проверка ролей и спеллов
     if (p.role == 'unknown') issues['role'] = "Role missing";
     if (p.spell == 'none' || p.spell == 'unknown') issues['spell'] = "Spell missing";
-
     return issues;
   }
 
@@ -105,21 +98,19 @@ class _AddGameScreenState extends State<AddGameScreen> {
     if (pickedFile != null) {
       setState(() => _image = File(pickedFile.path));
       _showProcessingDialog();
-      
-      // Даем время UI-потоку отрисовать диалог
       await Future.delayed(const Duration(milliseconds: 300));
-      
       try {
         final ocrResult = await OcrParser.parseWithCropping(_image!);
         if (ocrResult != null) {
           setState(() {
             gameResult = ocrResult.result;
-            duration = ocrResult.duration; // ОБНОВЛЯЕМ ВРЕМЯ
+            duration = ocrResult.duration;
             for (int i = 0; i < ocrResult.players.length; i++) {
               final pStats = ocrResult.players[i].stats;
-              bool isUser = _userNickname != null && pStats.nickname.toLowerCase() == _userNickname!.toLowerCase();
-              if (i < 5) myTeam[i] = pStats.copyWith(isUser: isUser, isEnemy: false);
-              else enemyTeam[i - 5] = pStats.copyWith(isUser: isUser, isEnemy: true);
+              // АВТО-ДЕТЕКТ USER: По нику из настроек
+              bool isUserMatch = _userNickname != null && pStats.nickname.toLowerCase() == _userNickname!.toLowerCase();
+              if (i < 5) myTeam[i] = pStats.copyWith(isUser: isUserMatch, isEnemy: false);
+              else enemyTeam[i - 5] = pStats.copyWith(isUser: isUserMatch, isEnemy: true);
             }
           });
           final bytes = await _image!.readAsBytes();
@@ -132,18 +123,13 @@ class _AddGameScreenState extends State<AddGameScreen> {
           await ImageIdentifier.preloadAssets(itemIds, 'items');
           await ImageIdentifier.preloadAssets(blessingIds, 'blessings');
           await ImageIdentifier.preloadAssets(spellIds, 'spells');
-
           for (int i = 0; i < ocrResult.players.length; i++) {
             final det = ocrResult.players[i];
-            
-            // Hero ID
             final hCrop = ImageIdentifier.cropRect(fullImg!, det.heroRect);
             if (hCrop != null) {
               String hId = await ImageIdentifier.findBestMatch(hCrop, heroIds, 'heroes');
               if (hId != 'unknown') setState(() { if (i < 5) myTeam[i] = myTeam[i].copyWith(hero: hId); else enemyTeam[i-5] = enemyTeam[i-5].copyWith(hero: hId); });
             }
-
-            // Items ID
             List<String> itemsFound = [];
             for (var r in det.itemRects) {
               final iCrop = ImageIdentifier.cropRect(fullImg!, r);
@@ -177,7 +163,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
     final nickCtrl = TextEditingController(text: p.nickname == "Unknown" ? "" : p.nickname);
     final goldCtrl = TextEditingController(text: p.gold);
     final scoreCtrl = TextEditingController(text: p.score);
-    String currentHero = p.hero; String currentRole = p.role; String currentSpell = p.spell; bool currentIsUser = p.isUser;
+    String currentHero = p.hero; String currentRole = p.role; String currentSpell = p.spell; 
     List<String> currentItems = p.items.isEmpty ? [] : p.items.split(',');
 
     showModalBottomSheet(
@@ -197,10 +183,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
           decoration: const BoxDecoration(color: Color(0xFF1A1C2C), borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
           child: Column(
             children: [
-              Padding(padding: const EdgeInsets.all(16), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text(isEnemy ? "Enemy ${index + 1}" : "Ally ${index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                Row(children: [const Text("Это я", style: TextStyle(fontSize: 12)), Switch(value: currentIsUser, onChanged: (v) => setModalState(() => currentIsUser = v))]),
-              ])),
+              Padding(padding: const EdgeInsets.all(16), child: Center(child: Text(isEnemy ? "Enemy ${index + 1}" : "Ally ${index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)))),
               Expanded(child: SingleChildScrollView(padding: const EdgeInsets.symmetric(horizontal: 16), child: Column(children: [
                 Row(children: [
                   GestureDetector(onTap: () async {
@@ -254,12 +237,10 @@ class _AddGameScreenState extends State<AddGameScreen> {
                 icon: const Icon(Icons.check_circle), label: const Text("SAVE PLAYER", style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () {
                   setState(() {
-                    if (currentIsUser) {
-                      for (int j=0; j<5; j++) myTeam[j] = myTeam[j].copyWith(isUser: false);
-                      for (int j=0; j<5; j++) enemyTeam[j] = enemyTeam[j].copyWith(isUser: false);
-                    }
                     final finalKda = "${killsCtrl.text.isEmpty?'0':killsCtrl.text}/${deathsCtrl.text.isEmpty?'0':deathsCtrl.text}/${assistsCtrl.text.isEmpty?'0':assistsCtrl.text}";
-                    final updated = p.copyWith(nickname: nickCtrl.text.isEmpty?"Unknown":nickCtrl.text, hero: currentHero, role: currentRole, spell: currentSpell, kda: finalKda, gold: goldCtrl.text, score: scoreCtrl.text, items: currentItems.join(','), isUser: currentIsUser);
+                    // Мы не ставим isUser вручную, DatabaseHelper сам определит это по нику
+                    bool isUserNow = _userNickname != null && nickCtrl.text.toLowerCase() == _userNickname!.toLowerCase();
+                    final updated = p.copyWith(nickname: nickCtrl.text.isEmpty?"Unknown":nickCtrl.text, hero: currentHero, role: currentRole, spell: currentSpell, kda: finalKda, gold: goldCtrl.text, score: scoreCtrl.text, items: currentItems.join(','), isUser: isUserNow);
                     if (isEnemy) enemyTeam[index] = updated; else myTeam[index] = updated;
                   });
                   Navigator.pop(ctx);
@@ -274,12 +255,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
 
   Future<void> _handleSaveGame() async {
     List<String> warnings = [];
-    
-    // Новое: проверка времени матча
-    if (duration == "00:00" || duration.isEmpty) {
-      warnings.add("Match Duration: Missing or 00:00");
-    }
-
+    if (duration == "00:00" || duration.isEmpty) warnings.add("Match Duration: Missing or 00:00");
     for (int i=0; i<5; i++) {
       var iss = _checkSuspicious(myTeam[i]);
       if (iss.isNotEmpty) warnings.add("Ally ${i+1}: ${iss.values.join(', ')}");
@@ -341,11 +317,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
     final p = isEnemy ? enemyTeam[i] : myTeam[i];
     final itemsList = p.items.isEmpty ? [] : p.items.split(',');
     final suspicious = _checkSuspicious(p).isNotEmpty;
-    
-    // Новое: проверка ролей и спеллов для UI
     bool roleSusp = p.role == 'unknown';
     bool spellSusp = p.spell == 'none' || p.spell == 'unknown';
-
     return ListTile(
       tileColor: suspicious ? Colors.red.withOpacity(0.05) : null,
       leading: Stack(children: [
@@ -359,10 +332,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
         Text("💰 ${p.gold}", style: TextStyle(color: suspicious ? Colors.red[200] : Colors.grey)),
         if (itemsList.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Wrap(spacing: 4, children: itemsList.map((item) => SizedBox(width: 24, height: 24, child: DataUtils.getItemIcon(item, size: 24))).toList())),
       ]),
-      trailing: Container(
-        decoration: spellSusp ? BoxDecoration(border: Border.all(color: Colors.red, width: 1), borderRadius: BorderRadius.circular(4)) : null,
-        child: DataUtils.getSpellIcon(p.spell, size: 24),
-      ),
+      trailing: Container(decoration: spellSusp ? BoxDecoration(border: Border.all(color: Colors.red, width: 1), borderRadius: BorderRadius.circular(4)) : null, child: DataUtils.getSpellIcon(p.spell, size: 24)),
       onTap: () => _editPlayerStats(i, isEnemy),
     );
   }

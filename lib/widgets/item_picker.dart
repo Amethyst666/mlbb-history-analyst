@@ -13,6 +13,7 @@ class ItemPicker extends StatefulWidget {
 class _ItemPickerState extends State<ItemPicker> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _searchQuery = "";
+  bool _onlyTier3 = true;
 
   @override
   void initState() {
@@ -37,7 +38,7 @@ class _ItemPickerState extends State<ItemPicker> with SingleTickerProviderStateM
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: TextField(
               decoration: InputDecoration(
                 hintText: AppStrings.get(context, 'search'),
@@ -48,15 +49,29 @@ class _ItemPickerState extends State<ItemPicker> with SingleTickerProviderStateM
               onChanged: (v) => setState(() => _searchQuery = v),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Text("Только Tier 3", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Switch(
+                  value: _onlyTier3,
+                  activeColor: Colors.cyanAccent,
+                  onChanged: (v) => setState(() => _onlyTier3 = v),
+                ),
+              ],
+            ),
+          ),
           TabBar(
             controller: _tabController,
             indicatorColor: Colors.cyanAccent,
             tabs: [
               const Tab(icon: Icon(Icons.all_inclusive)),
-              Tab(icon: Image.asset('assets/roles/gold.png', width: 24, height: 24)), // Physical
-              const Tab(icon: Icon(Icons.auto_fix_high, color: Colors.blueAccent)), // Magic
-              const Tab(icon: Icon(Icons.shield, color: Colors.greenAccent)), // Defense
-              const Tab(icon: Icon(Icons.directions_run, color: Colors.orangeAccent)), // Movement
+              Tab(icon: Image.asset('assets/roles/gold.png', width: 24, height: 24)), 
+              const Tab(icon: Icon(Icons.auto_fix_high, color: Colors.blueAccent)), 
+              const Tab(icon: Icon(Icons.shield, color: Colors.greenAccent)), 
+              const Tab(icon: Icon(Icons.directions_run, color: Colors.orangeAccent)), 
             ],
           ),
           Expanded(
@@ -79,9 +94,9 @@ class _ItemPickerState extends State<ItemPicker> with SingleTickerProviderStateM
   Widget _buildGrid(String? category) {
     final filtered = GameData.items.where((item) {
       if (category != null && item.category != category) return false;
-      // Filter: Only Tier 3 OR basic boots OR any movement item
-      if (item.tier != 3 && item.id != 'boots' && item.category != 'movement') return false; 
-      
+      if (_onlyTier3) {
+        if (item.tier != 3 && item.id != 'boots' && item.category != 'movement') return false; 
+      }
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
       return item.id.contains(q) || item.en.toLowerCase().contains(q) || item.ru.toLowerCase().contains(q);
@@ -122,12 +137,12 @@ class _ItemPickerState extends State<ItemPicker> with SingleTickerProviderStateM
         builder: (c) => const _BlessingPicker(),
       );
       if (blessing != null && blessing != 'none') {
-        Navigator.pop(context, "${item.id}@$blessing");
+        if (mounted) Navigator.pop(context, "${item.id}@$blessing");
       } else if (blessing == 'none') {
-        Navigator.pop(context, item.id);
+        if (mounted) Navigator.pop(context, item.id);
       }
     } else {
-      Navigator.pop(context, item.id);
+      if (mounted) Navigator.pop(context, item.id);
     }
   }
 }

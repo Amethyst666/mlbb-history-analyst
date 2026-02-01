@@ -177,6 +177,7 @@ class GameData {
   static const List<GameEntity> items = [
     // === PHYSICAL ===
     GameEntity(id: 'dagger', en: 'Dagger', ru: 'Кинжал', category: 'physical', tier: 1),
+    GameEntity(id: 'knife', en: 'Knife', ru: 'Нож', category: 'physical', tier: 1),
     GameEntity(id: 'vampire_mallet', en: 'Vampire Mallet', ru: 'Вампирская Колотушка', category: 'physical', tier: 2),
     GameEntity(id: 'javelin', en: 'Javelin', ru: 'Копье', category: 'physical', tier: 1),
     GameEntity(id: 'iron_hunting_bow', en: 'Iron Hunting Bow', ru: 'Железный Охотничий Лук', category: 'physical', tier: 2), 

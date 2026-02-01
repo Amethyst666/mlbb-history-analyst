@@ -23,12 +23,19 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _dbHelper.updateNotifier.addListener(_loadData); // ПОДПИСКА
+  }
+
+  @override
+  void dispose() {
+    _dbHelper.updateNotifier.removeListener(_loadData); // ОТПИСКА
+    super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadData(); 
+    // Больше не нужно вызывать _loadData() вручную, слушатель сделает это сам
   }
 
   Future<void> _loadData() async {
@@ -61,125 +68,145 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    Widget content;
     if (_games.isEmpty) {
-      return Center(child: Text(AppStrings.get(context, 'no_games')));
-    }
+      content = Center(child: Text(AppStrings.get(context, 'no_games')));
+    } else {
+      content = ListView.builder(
+        itemCount: _games.length,
+        itemBuilder: (context, index) {
+          final game = _games[index];
+          final isVictory = game.result == 'VICTORY';
+          final resultText = isVictory ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat');
+          final bool noUser = game.hero == 'none';
+          
+          final heroName = noUser ? "Матч без игрока" : DataUtils.getLocalizedHeroName(game.hero, context);
 
-    return ListView.builder(
-      itemCount: _games.length,
-      itemBuilder: (context, index) {
-        final game = _games[index];
-        final isVictory = game.result == 'VICTORY';
-        final resultText = isVictory ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat');
-        final bool noUser = game.hero == 'none';
-        
-        // Use DataUtils to translate ID
-        final heroName = noUser ? "Матч без игрока" : DataUtils.getLocalizedHeroName(game.hero, context);
-
-        final cardContent = Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: ListTile(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GameDetailsScreen(game: game),
-                ),
-              );
-            },
-            leading: noUser 
-              ? const CircleAvatar(radius: 25, backgroundColor: Colors.white10, child: Icon(Icons.person_off, color: Colors.grey))
-              : Stack(
-                  children: [
-                    DataUtils.getHeroIcon(game.hero, radius: 25),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(1),
-                        decoration: const BoxDecoration(
-                          color: Colors.black87,
-                          shape: BoxShape.circle,
+          final cardContent = Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: ListTile(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => GameDetailsScreen(game: game),
+                  ),
+                ).then((_) => _loadData());
+              },
+              leading: noUser 
+                ? const CircleAvatar(radius: 25, backgroundColor: Colors.white10, child: Icon(Icons.person_off, color: Colors.grey))
+                : Stack(
+                    children: [
+                      DataUtils.getHeroIcon(game.hero, radius: 25),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(1),
+                          decoration: const BoxDecoration(
+                            color: Colors.black87,
+                            shape: BoxShape.circle,
+                          ),
+                          child: DataUtils.getRoleIcon(game.role, size: 14),
                         ),
-                        child: DataUtils.getRoleIcon(game.role, size: 14),
+                      ),
+                    ],
+                  ),
+              title: Text(heroName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: noUser ? Colors.grey : Colors.white,
+                  )),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!noUser) ...[
+                    Text('${AppStrings.get(context, 'kda')}: ${game.kda}'),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
+                      children: game.items.split(',').where((i) => i.isNotEmpty).map((item) => 
+                        SizedBox(width: 20, height: 20, child: DataUtils.getItemIcon(item, size: 20))
+                      ).toList(),
+                    ),
+                  ] else
+                    Text(game.date.toString().substring(0, 10)),
+                ],
+              ),
+              isThreeLine: !noUser,
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(resultText,
+                      style: TextStyle(
+                          color: isVictory ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold)),
+                  if (_isDeveloperMode)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddGameScreen(
+                              initialGame: game,
+                              onSaveSuccess: () {
+                                _loadData();
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Icon(Icons.edit, size: 20, color: Colors.blueGrey),
                       ),
                     ),
-                  ],
-                ),
-            title: Text(heroName,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: noUser ? Colors.grey : Colors.white,
-                )),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!noUser) ...[
-                  Text('${AppStrings.get(context, 'kda')}: ${game.kda}'),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 4,
-                    children: game.items.split(',').where((i) => i.isNotEmpty).map((item) => 
-                      SizedBox(width: 20, height: 20, child: DataUtils.getItemIcon(item, size: 20))
-                    ).toList(),
-                  ),
-                ] else
-                  Text(game.date.toString().substring(0, 10)), // Keep only date for games without me
-              ],
+                ],
+              ),
             ),
-            isThreeLine: !noUser,
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(resultText,
-                    style: TextStyle(
-                        color: isVictory ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold)),
-                if (_isDeveloperMode)
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => AddGameScreen(
-                            initialGame: game,
-                            onSaveSuccess: () {
-                              _loadData();
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Icon(Icons.edit, size: 20, color: Colors.blueGrey),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-
-        if (_isDeveloperMode) {
-          return Dismissible(
-            key: Key(game.id.toString()),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              color: Colors.red,
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: const Icon(Icons.delete, color: Colors.white),
-            ),
-            onDismissed: (direction) {
-              _deleteGame(index);
-            },
-            child: cardContent,
           );
-        } else {
-          return cardContent;
-        }
-      },
+
+          if (_isDeveloperMode) {
+            return Dismissible(
+              key: Key(game.id.toString()),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                color: Colors.red,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              onDismissed: (direction) {
+                _deleteGame(index);
+              },
+              child: cardContent,
+            );
+          } else {
+            return cardContent;
+          }
+        },
+      );
+    }
+
+    return Scaffold(
+      body: content,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddGameScreen(
+                onSaveSuccess: () {
+                  _loadData();
+                },
+              ),
+            ),
+          );
+        },
+        backgroundColor: Colors.deepPurpleAccent,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
     );
   }
 }

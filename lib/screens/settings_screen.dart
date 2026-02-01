@@ -99,14 +99,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.people),
-            title: Text(AppStrings.get(context, 'manage_players')),
-            subtitle: Text(AppStrings.get(context, 'players_desc')),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const PlayersManagementScreen()));
-            },
-          ),
-          ListTile(
             leading: const Icon(Icons.screenshot_monitor),
             title: Text(AppStrings.get(context, 'calibration')),
             subtitle: Text(AppStrings.get(context, 'calibration_desc')),
@@ -147,7 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (context) => const AssetGalleryScreen()));
             },
           ),
-          if (_isDeveloperMode)
+          if (_isDeveloperMode) ...[
             ListTile(
               leading: const Icon(Icons.bug_report),
               title: const Text('OCR Debug'),
@@ -156,6 +148,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const OcrDebugScreen()));
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.person_remove, color: Colors.orangeAccent),
+              title: const Text('Очистить базу игроков'),
+              subtitle: const Text('Удалить игроков, которых нет ни в одном матче'),
+              onTap: () async {
+                final count = await _dbHelper.deleteUnusedProfiles();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Удалено профилей: $count")),
+                  );
+                }
+              },
+            ),
+          ],
           ListTile(
             leading: const Icon(Icons.info),
             title: Text(AppStrings.get(context, 'about')),

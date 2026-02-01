@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/player_profile.dart';
 import '../utils/database_helper.dart';
 import '../utils/app_strings.dart';
+import 'player_profile_screen.dart';
 
 class PlayersManagementScreen extends StatefulWidget {
   const PlayersManagementScreen({super.key});
@@ -10,130 +11,259 @@ class PlayersManagementScreen extends StatefulWidget {
   State<PlayersManagementScreen> createState() => _PlayersManagementScreenState();
 }
 
-class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
+class _PlayersManagementScreenState extends State<PlayersManagementScreen> with SingleTickerProviderStateMixin {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  late TabController _tabController;
+  
   List<PlayerProfile> _profiles = [];
+  List<PlayerProfile> _filteredProfiles = [];
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadProfiles();
+    _searchController.addListener(_onSearchChanged);
+    _dbHelper.updateNotifier.addListener(_loadProfiles);
   }
 
-  Future<void> _loadProfiles() async {
-    final profiles = await _dbHelper.getAllProfiles();
+  @override
+  void dispose() {
+    _dbHelper.updateNotifier.removeListener(_loadProfiles);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.toLowerCase();
     setState(() {
-      _profiles = profiles;
-      _isLoading = false;
+      _filteredProfiles = _profiles.where((p) {
+        return p.mainNickname.toLowerCase().contains(query);
+      }).toList();
     });
   }
 
-  void _editProfile(PlayerProfile profile) async {
-    final nicknames = await _dbHelper.getNicknamesForProfile(profile.id!);
+  Future<void> _loadProfiles() async {
     if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(profile.mainNickname),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Associated Nicknames:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 4,
-              children: nicknames.map((n) => Chip(
-                label: Text(n, style: const TextStyle(fontSize: 10)),
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-              )).toList(),
-            ),
-            const Divider(),
-            const Text("Change Main Nickname:", style: TextStyle(fontSize: 12)),
-            TextField(
-              decoration: const InputDecoration(hintText: "Enter new name"),
-              onSubmitted: (newName) async {
-                if (newName.isNotEmpty) {
-                  await _dbHelper.updateMainNickname(profile.id!, newName);
-                  Navigator.pop(context);
-                  _loadProfiles();
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close")),
-          ElevatedButton(
-            onPressed: () => _showMergeDialog(profile),
-            child: const Text("Merge with another..."),
-          ),
-        ],
-      ),
-    );
+    setState(() => _isLoading = true);
+    final profiles = await _dbHelper.getAllProfiles();
+    if (mounted) {
+      setState(() {
+        _profiles = profiles;
+        _filteredProfiles = profiles;
+        _isLoading = false;
+      });
+      _onSearchChanged();
+    }
   }
 
-  void _showMergeDialog(PlayerProfile sourceProfile) async {
-    Navigator.pop(context); // Close edit dialog
-    final otherProfiles = _profiles.where((p) => p.id != sourceProfile.id).toList();
+  void _showAliasManagementDialog(PlayerProfile profile) async {
+    final List<String> currentNicks = await _dbHelper.getNicknamesForProfile(profile.id!);
+    final List<Map<String, dynamic>> otherProfiles = await _dbHelper.getOtherMainNicknames(profile.id!);
+    final newAliasController = TextEditingController();
 
-    showDialog(
+    if (!mounted) return;
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Merge Profiles"),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: ListView.builder(
-            itemCount: otherProfiles.length,
-            itemBuilder: (context, index) {
-              final target = otherProfiles[index];
-              return ListTile(
-                title: Text(target.mainNickname),
-                subtitle: const Text("Click to merge INTO this profile"),
-                onTap: () async {
-                  final nicks = await _dbHelper.getNicknamesForProfile(sourceProfile.id!);
-                  for (var nick in nicks) {
-                    await _dbHelper.associateNicknameWithProfile(nick, target.id!);
-                  }
-                  if (mounted) {
-                    Navigator.pop(context);
-                    _loadProfiles();
-                  }
-                },
-              );
-            },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(builder: (stCtx, setModalState) {
+        final input = newAliasController.text.toLowerCase().trim();
+        final filteredOtherProfiles = otherProfiles.where((p) {
+          return (p['main_nickname'] as String).toLowerCase().contains(input);
+        }).toList();
+
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1A1C2C),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
           ),
-        ),
-      ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Алиасы: ${profile.mainNickname}", 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.cyanAccent)),
+              const SizedBox(height: 15),
+              
+              const Text("Текущие ники (нажмите для выбора главного):", style: TextStyle(color: Colors.grey, fontSize: 11)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 0,
+                children: currentNicks.map((n) {
+                  bool isMain = n.toLowerCase() == profile.mainNickname.toLowerCase();
+                  bool canDelete = currentNicks.length > 1;
+
+                  return InputChip(
+                    label: Text(n),
+                    labelStyle: TextStyle(color: isMain ? Colors.black : Colors.white, fontWeight: isMain ? FontWeight.bold : FontWeight.normal),
+                    backgroundColor: isMain ? Colors.cyanAccent : Colors.white10,
+                    selected: isMain,
+                    selectedColor: Colors.cyanAccent,
+                    showCheckmark: false,
+                    onPressed: () async {
+                      if (!isMain) {
+                        await _dbHelper.updateMainNickname(profile.id!, n);
+                        setModalState(() { profile.mainNickname = n; });
+                      }
+                    },
+                    onDeleted: (canDelete && !isMain) ? () async {
+                      await _dbHelper.detachNicknameFromProfile(n);
+                      Navigator.pop(ctx);
+                    } : null,
+                    deleteIcon: Icon(Icons.cancel, size: 16, color: isMain ? Colors.black54 : Colors.white54),
+                  );
+                }).toList(),
+              ),
+              
+              const Divider(height: 30, color: Colors.white24),
+              const Text("Присоединить игрока или новый ник:", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: newAliasController,
+                onChanged: (v) => setModalState(() {}),
+                decoration: InputDecoration(
+                  hintText: "Поиск игрока или ввод ника...",
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.cyanAccent),
+                    onPressed: () async {
+                      final val = newAliasController.text.trim();
+                      if (val.isNotEmpty) {
+                        await _dbHelper.associateNicknameWithProfile(val, profile.id!);
+                        Navigator.pop(ctx);
+                      }
+                    },
+                  ),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: filteredOtherProfiles.length,
+                  separatorBuilder: (c, i) => const Divider(height: 1, color: Colors.white10),
+                  itemBuilder: (c, i) {
+                    final other = filteredOtherProfiles[i];
+                    return ListTile(
+                      title: Text(other['main_nickname']),
+                      trailing: const Icon(Icons.merge_type, color: Colors.cyanAccent, size: 20),
+                      onTap: () async {
+                        await _dbHelper.mergeProfiles(other['id'], profile.id!);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Manage Players")),
+      appBar: AppBar(
+        title: Text(AppStrings.get(context, 'manage_players')),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(110),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: AppStrings.get(context, 'search_hint'),
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                    filled: true,
+                    fillColor: Colors.white10,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                ),
+              ),
+              TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.cyanAccent,
+                labelColor: Colors.cyanAccent,
+                unselectedLabelColor: Colors.grey,
+                tabs: const [
+                  Tab(text: "ВСЕ"),
+                  Tab(text: "ВЕРИФИЦИРОВАННЫЕ"),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
-        : ListView.builder(
-            itemCount: _profiles.length,
-            itemBuilder: (context, index) {
-              final p = _profiles[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: p.isUser ? Colors.deepPurpleAccent : Colors.blueGrey,
-                  child: Icon(p.isUser ? Icons.person : Icons.person_outline, color: Colors.white),
-                ),
-                title: Text(p.mainNickname, style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal)),
-                subtitle: Text(p.isUser ? "This is You" : "Player Profile"),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _editProfile(p),
-              );
-            },
+        : TabBarView(
+            controller: _tabController,
+            children: [
+              _buildPlayerList(_filteredProfiles),
+              _buildPlayerList(_filteredProfiles.where((p) => p.isVerified).toList()),
+            ],
           ),
+    );
+  }
+
+  Widget _buildPlayerList(List<PlayerProfile> list) {
+    if (list.isEmpty) return const Center(child: Text("Пусто", style: TextStyle(color: Colors.grey)));
+    return ListView.builder(
+      itemCount: list.length,
+      itemBuilder: (context, index) {
+        final p = list[index];
+        return ListTile(
+          leading: Stack(
+            children: [
+              CircleAvatar(
+                backgroundColor: p.isUser ? Colors.cyanAccent : Colors.deepPurpleAccent,
+                child: Icon(p.isUser ? Icons.person : Icons.people, color: Colors.black),
+              ),
+              if (p.isVerified)
+                const Positioned(
+                  bottom: 0, right: 0,
+                  child: CircleAvatar(
+                    radius: 8, backgroundColor: Colors.black,
+                    child: Icon(Icons.verified, color: Colors.cyanAccent, size: 12),
+                  ),
+                ),
+            ],
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  p.mainNickname,
+                  style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (p.isVerified) const SizedBox(width: 5),
+              if (p.isVerified) const Icon(Icons.verified, color: Colors.cyanAccent, size: 16),
+            ],
+          ),
+          subtitle: p.isUser ? const Text("Это вы", style: TextStyle(color: Colors.cyanAccent, fontSize: 12)) : null,
+          trailing: IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white54),
+            onPressed: () => _showAliasManagementDialog(p),
+          ),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(builder: (c) => PlayerProfileScreen(profile: p)));
+          },
+        );
+      },
     );
   }
 }
