@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
 import '../main.dart';
 import '../utils/app_strings.dart';
 import '../utils/database_helper.dart';
 import 'asset_gallery_screen.dart';
-import 'players_management_screen.dart';
-import 'calibration_screen.dart';
-import 'ocr_debug_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +16,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDeveloperMode = false;
   final TextEditingController _nickController = TextEditingController();
+  final TextEditingController _pathController = TextEditingController();
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
   @override
@@ -29,30 +28,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _nickController.dispose();
+    _pathController.dispose();
     super.dispose();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final userNick = prefs.getString('userNickname') ?? 'You';
+    final userId = prefs.getString('userId') ?? '';
+    final historyPath = prefs.getString('historyPath') ?? '';
     setState(() {
       _isDeveloperMode = prefs.getBool('isDeveloperMode') ?? false;
-      _nickController.text = userNick;
+      _nickController.text = userId;
+      _pathController.text = historyPath;
     });
   }
 
   Future<void> _saveNickname(String value) async {
     if (value.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userNickname', value.trim());
-    
-    int profileId = await _dbHelper.getOrCreateProfile(value.trim(), isUser: true);
-    await _dbHelper.updateMainNickname(profileId, value.trim());
+    await prefs.setString('userId', value.trim());
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Никнейм сохранен")),
+        const SnackBar(content: Text("ID пользователя сохранен")),
       );
+    }
+  }
+
+  Future<void> _pickHistoryFolder() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('historyPath', selectedDirectory);
+      setState(() {
+        _pathController.text = selectedDirectory;
+      });
     }
   }
 
@@ -83,28 +93,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _nickController,
-              decoration: InputDecoration(
-                labelText: AppStrings.get(context, 'my_nickname'),
-                hintText: "Nickname",
-                prefixIcon: const Icon(Icons.person),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.save),
-                  onPressed: () => _saveNickname(_nickController.text),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _nickController,
+                  decoration: InputDecoration(
+                    labelText: "Мой Game ID (для авто-определения)", 
+                    hintText: "Например: 12345678",
+                    prefixIcon: const Icon(Icons.perm_identity),
+                    border: const OutlineInputBorder(),
+                    helperText: "Нужен для автоматического определения 'Меня' при импорте.",
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () => _saveNickname(_nickController.text),
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  onSubmitted: _saveNickname,
                 ),
-              ),
-              onSubmitted: _saveNickname,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _pathController,
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: "Папка с историей игр",
+                    hintText: "Выберите папку...",
+                    prefixIcon: const Icon(Icons.folder),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.folder_open),
+                      onPressed: _pickHistoryFolder,
+                    ),
+                  ),
+                  onTap: _pickHistoryFolder,
+                ),
+              ],
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.screenshot_monitor),
-            title: Text(AppStrings.get(context, 'calibration')),
-            subtitle: Text(AppStrings.get(context, 'calibration_desc')),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const CalibrationScreen()));
-            },
           ),
           const Divider(),
           ListTile(
@@ -141,14 +165,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           if (_isDeveloperMode) ...[
             ListTile(
-              leading: const Icon(Icons.bug_report),
-              title: const Text('OCR Debug'),
-              subtitle: const Text('Visualize parsing zones'),
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const OcrDebugScreen()));
-              },
-            ),
-            ListTile(
               leading: const Icon(Icons.person_remove, color: Colors.orangeAccent),
               title: const Text('Очистить базу игроков'),
               subtitle: const Text('Удалить игроков, которых нет ни в одном матче'),
@@ -165,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info),
             title: Text(AppStrings.get(context, 'about')),
-            subtitle: const Text('Version 1.2.0'),
+            subtitle: const Text('Version 2.1.0 (Batch Import)'),
             onTap: () {},
           ),
         ],

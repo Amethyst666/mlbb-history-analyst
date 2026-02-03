@@ -3,9 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_stats.dart';
 import '../utils/database_helper.dart';
 import 'game_details_screen.dart';
-import 'add_game_screen.dart'; // Added missing import
+import 'add_game_screen.dart';
 import '../utils/app_strings.dart';
-import '../utils/data_utils.dart'; // Added import
+import '../utils/data_utils.dart';
+import 'history_folder_screen.dart';
 
 class RecentGamesScreen extends StatefulWidget {
   const RecentGamesScreen({super.key});
@@ -23,19 +24,13 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
   void initState() {
     super.initState();
     _loadData();
-    _dbHelper.updateNotifier.addListener(_loadData); // ПОДПИСКА
+    _dbHelper.updateNotifier.addListener(_loadData);
   }
 
   @override
   void dispose() {
-    _dbHelper.updateNotifier.removeListener(_loadData); // ОТПИСКА
+    _dbHelper.updateNotifier.removeListener(_loadData);
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Больше не нужно вызывать _loadData() вручную, слушатель сделает это сам
   }
 
   Future<void> _loadData() async {
@@ -66,6 +61,51 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
     }
   }
 
+  void _showAddOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('Системный файлпикер'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddGameScreen(
+                        onSaveSuccess: () {
+                          _loadData();
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.list),
+                title: const Text('Из папки истории'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HistoryFolderScreen()),
+                  );
+                  if (result == true) {
+                    _loadData(); // Refresh if games were added
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget content;
@@ -78,9 +118,9 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
           final game = _games[index];
           final isVictory = game.result == 'VICTORY';
           final resultText = isVictory ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat');
-          final bool noUser = game.hero == 'none';
+          final bool noUser = game.heroId == 0;
           
-          final heroName = noUser ? "Матч без игрока" : DataUtils.getLocalizedHeroName(game.hero, context);
+          final heroName = noUser ? "Матч без игрока" : DataUtils.getLocalizedHeroName(game.heroId, context);
 
           final cardContent = Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -97,7 +137,7 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                 ? const CircleAvatar(radius: 25, backgroundColor: Colors.white10, child: Icon(Icons.person_off, color: Colors.grey))
                 : Stack(
                     children: [
-                      DataUtils.getHeroIcon(game.hero, radius: 25),
+                      DataUtils.getHeroIcon(game.heroId, radius: 25),
                       Positioned(
                         bottom: 0,
                         right: 0,
@@ -125,7 +165,7 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 4,
-                      children: game.items.split(',').where((i) => i.isNotEmpty).map((item) => 
+                      children: game.itemIds.map((item) => 
                         SizedBox(width: 20, height: 20, child: DataUtils.getItemIcon(item, size: 20))
                       ).toList(),
                     ),
@@ -192,18 +232,7 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
     return Scaffold(
       body: content,
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddGameScreen(
-                onSaveSuccess: () {
-                  _loadData();
-                },
-              ),
-            ),
-          );
-        },
+        onPressed: _showAddOptions,
         backgroundColor: Colors.deepPurpleAccent,
         child: const Icon(Icons.add, color: Colors.white),
       ),

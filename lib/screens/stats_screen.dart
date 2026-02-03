@@ -69,8 +69,8 @@ class _StatsScreenState extends State<StatsScreen> {
                     itemBuilder: (context, index) {
                       final game = _games[index];
                       return ListTile(
-                        leading: DataUtils.getHeroIcon(game.hero, radius: 20),
-                        title: Text('${game.hero} - ${game.kda}'),
+                        leading: DataUtils.getHeroIcon(game.heroId, radius: 20),
+                        title: Text('${DataUtils.getLocalizedHeroName(game.heroId, context)} - ${game.kda}'),
                         subtitle: Text('Players: ${game.players}\nDate: ${game.date.toString().substring(0, 16)}'),
                         isThreeLine: true,
                       );

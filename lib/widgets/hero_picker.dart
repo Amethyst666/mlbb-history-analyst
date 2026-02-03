@@ -14,9 +14,10 @@ class _HeroPickerState extends State<HeroPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredHeroes = GameData.heroes.where((h) {
+    final filtered = GameData.heroes.where((h) {
+      if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
-      return h.id.contains(query) || h.en.toLowerCase().contains(query) || h.ru.toLowerCase().contains(query);
+      return h.id.toString().contains(query) || h.en.toLowerCase().contains(query) || h.ru.toLowerCase().contains(query);
     }).toList();
 
     return Container(
@@ -39,11 +40,11 @@ class _HeroPickerState extends State<HeroPicker> {
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
               ),
-              itemCount: filteredHeroes.length,
+              itemCount: filtered.length,
               itemBuilder: (context, index) {
-                final hero = filteredHeroes[index];
+                final hero = filtered[index];
                 return GestureDetector(
-                  onTap: () => Navigator.pop(context, hero.id),
+                  onTap: () => Navigator.pop(context, hero.assetName), // Returning assetName (String) for compatibility
                   child: Column(
                     children: [
                       Expanded(

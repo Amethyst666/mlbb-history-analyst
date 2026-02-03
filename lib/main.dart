@@ -16,7 +16,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize DB and fix old records
-  await DatabaseHelper().fixLegacyGames();
+  // await DatabaseHelper().fixLegacyGames();
 
   final prefs = await SharedPreferences.getInstance();
   final String? savedLang = prefs.getString('language_code');

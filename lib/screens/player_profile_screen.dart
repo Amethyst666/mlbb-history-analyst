@@ -16,16 +16,17 @@ class PlayerProfileScreen extends StatefulWidget {
 
 class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   final _dbHelper = DatabaseHelper();
-  late bool _isVerified;
   
   List<Map<String, dynamic>> _heroStats = [];
   List<Map<String, dynamic>> _playerGames = [];
   bool _isLoading = true;
+  
+  int _totalAllyGames = 0;
+  int _totalEnemyGames = 0;
 
   @override
   void initState() {
     super.initState();
-    _isVerified = widget.profile.isVerified;
     _loadStats();
   }
 
@@ -33,19 +34,23 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     setState(() => _isLoading = true);
     final stats = await _dbHelper.getHeroStatsForProfile(widget.profile.id!);
     final games = await _dbHelper.getGamesForProfile(widget.profile.id!);
+    
+    int ally = 0;
+    int enemy = 0;
+    for (var s in stats) {
+      ally += (s['ally_games'] as num).toInt();
+      enemy += (s['enemy_games'] as num).toInt();
+    }
+
     if (mounted) {
       setState(() {
         _heroStats = stats;
         _playerGames = games;
+        _totalAllyGames = ally;
+        _totalEnemyGames = enemy;
         _isLoading = false;
       });
     }
-  }
-
-  void _toggleVerify() async {
-    setState(() => _isVerified = !_isVerified);
-    await _dbHelper.toggleVerification(widget.profile.id!, _isVerified);
-    widget.profile.isVerified = _isVerified;
   }
 
   @override
@@ -53,13 +58,6 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.profile.mainNickname),
-        actions: [
-          IconButton(
-            icon: Icon(_isVerified ? Icons.verified : Icons.verified_outlined, 
-              color: _isVerified ? Colors.cyanAccent : Colors.white54),
-            onPressed: _toggleVerify,
-          )
-        ],
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
@@ -87,35 +85,49 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     return Center(
       child: Column(
         children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 45,
-                backgroundColor: widget.profile.isUser ? Colors.cyanAccent : Colors.deepPurpleAccent,
-                child: Icon(widget.profile.isUser ? Icons.person : Icons.people, size: 45, color: Colors.black),
-              ),
-              if (_isVerified)
-                const Positioned(
-                  bottom: 0, right: 0,
-                  child: CircleAvatar(
-                    radius: 14, backgroundColor: Color(0xFF1A1C2C),
-                    child: Icon(Icons.verified, color: Colors.cyanAccent, size: 18),
-                  ),
-                ),
-            ],
+          CircleAvatar(
+            radius: 45,
+            backgroundColor: widget.profile.isUser ? Colors.cyanAccent : Colors.deepPurpleAccent,
+            child: Icon(widget.profile.isUser ? Icons.person : Icons.people, size: 45, color: Colors.black),
           ),
           const SizedBox(height: 15),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(widget.profile.mainNickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              if (_isVerified) const SizedBox(width: 8),
-              if (_isVerified) const Icon(Icons.verified, color: Colors.cyanAccent, size: 18),
-            ],
-          ),
+          Text(widget.profile.mainNickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text("ID: ${widget.profile.id}", style: const TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'monospace')),
+          const SizedBox(height: 4),
           Text(widget.profile.isUser ? "Ваш профиль" : "Профиль игрока", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          if (!widget.profile.isUser) ...[
+            const SizedBox(height: 15),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildStatBadge(AppStrings.get(context, 'with_me'), _totalAllyGames, Colors.blueAccent),
+                const SizedBox(width: 15),
+                _buildStatBadge(AppStrings.get(context, 'against_me'), _totalEnemyGames, Colors.redAccent),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+
+  Widget _buildStatBadge(String label, int count, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Text(count.toString(), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+        ),
+      ],
     );
   }
 
@@ -140,11 +152,11 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   }
 
   Widget _buildHeroStatRow(Map<String, dynamic> s, {bool isTop = false}) {
-    final String hero = s['hero'];
-    final int allyGames = s['ally_games'] ?? 0;
-    final int allyWins = s['ally_wins'] ?? 0;
-    final int enemyGames = s['enemy_games'] ?? 0;
-    final int enemyWins = s['enemy_wins'] ?? 0;
+    final int heroId = int.tryParse(s['hero'].toString()) ?? 0;
+    final int allyGames = (s['ally_games'] as num).toInt();
+    final int allyWins = (s['ally_wins'] as num).toInt();
+    final int enemyGames = (s['enemy_games'] as num).toInt();
+    final int enemyWins = (s['enemy_wins'] as num).toInt();
     final int totalGames = allyGames + enemyGames;
 
     double allyWr = allyGames > 0 ? (allyWins / allyGames) * 100 : 0;
@@ -160,7 +172,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
       ),
       child: Row(
         children: [
-          DataUtils.getHeroIcon(hero, radius: 25),
+          DataUtils.getHeroIcon(heroId, radius: 25),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
@@ -169,16 +181,16 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(DataUtils.getLocalizedHeroName(hero, context), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(DataUtils.getLocalizedHeroName(heroId, context), style: const TextStyle(fontWeight: FontWeight.bold)),
                     Text("Игр: $totalGames", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(child: _buildSmallWrBar("За меня", allyWr, allyGames, Colors.blueAccent)),
+                    Expanded(child: _buildSmallWrBar(AppStrings.get(context, 'with_me'), allyWr, allyGames, Colors.blueAccent)),
                     const SizedBox(width: 10),
-                    Expanded(child: _buildSmallWrBar("Против", enemyWr, enemyGames, Colors.redAccent)),
+                    Expanded(child: _buildSmallWrBar(AppStrings.get(context, 'against_me'), enemyWr, enemyGames, Colors.redAccent)),
                   ],
                 ),
               ],
@@ -217,15 +229,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
   Widget _buildGameTile(Map<String, dynamic> g) {
     final game = GameStats.fromMap(g);
-    final String hero = g['player_hero'];
+    final int heroId = int.tryParse(g['player_hero'] ?? '0') ?? 0;
+    final String role = g['player_role'];
     final String kda = g['player_kda'];
     final double score = double.tryParse(g['player_score'].toString()) ?? 0.0;
     final bool isEnemy = g['player_is_enemy'] == 1;
     final bool isVictory = game.result == 'VICTORY';
     
-    // Результат для КОНКРЕТНОГО игрока
-    // Если он союзник и Victory -> он выиграл.
-    // Если он враг и Defeat -> он выиграл.
     final bool playerWon = (!isEnemy && isVictory) || (isEnemy && !isVictory);
 
     return Card(
@@ -237,13 +247,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
         },
         leading: Stack(
           children: [
-            DataUtils.getHeroIcon(hero, radius: 22),
+            DataUtils.getHeroIcon(heroId, radius: 22),
             Positioned(
               bottom: 0, right: 0,
               child: Container(
                 padding: const EdgeInsets.all(1),
                 decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
-                child: DataUtils.getRoleIcon(g['player_role'], size: 12),
+                child: DataUtils.getRoleIcon(role, size: 12),
               ),
             ),
           ],
@@ -252,15 +262,33 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
           children: [
             Text(playerWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: playerWon ? Colors.green : Colors.red)),
             const SizedBox(width: 8),
-            Text(isEnemy ? "(Враг)" : "(Союзник)", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Expanded(
+              child: Text(DataUtils.getLocalizedHeroName(heroId, context), 
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        subtitle: Text("KDA: $kda  •  ⭐ $score", style: const TextStyle(fontSize: 12)),
+        subtitle: Row(
+          children: [
+            Flexible(
+              child: Text(DataUtils.getLocalizedRoleName(role, context), 
+                style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Text(" • ", style: TextStyle(color: Colors.white24)),
+            Text("KDA: $kda", style: const TextStyle(fontSize: 11)),
+            const Text(" • ", style: TextStyle(color: Colors.white24)),
+            Text("⭐ $score", style: const TextStyle(fontSize: 11)),
+          ],
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(game.duration, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+            Text(isEnemy ? "Враг" : "Союзник", style: TextStyle(fontSize: 10, color: isEnemy ? Colors.redAccent.withOpacity(0.7) : Colors.blueAccent.withOpacity(0.7))),
             Text(game.date.toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.white24)),
           ],
         ),

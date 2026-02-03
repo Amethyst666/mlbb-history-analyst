@@ -119,7 +119,7 @@ class AssetGalleryScreen extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8)),
               child: Image.asset(
-                'assets/blessings/${b.id}.png',
+                'assets/blessings/${b.assetName}.png',
                 width: 50,
                 height: 50,
                 errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50, color: Colors.red),

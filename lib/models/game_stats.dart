@@ -1,55 +1,64 @@
 class GameStats {
   final int? id;
+  final String matchId; // Added Match ID from Game
   final String result;
-  final String hero;
+  final int heroId; // Changed from String hero
   final String kda;
-  final String items;
+  final List<int> itemIds; // Changed from String items
   final String players;
   final DateTime date;
   final String duration;
   final String role;
-  final String spell; // New field
+  final int spellId; // Changed from String spell
 
   GameStats({
     this.id,
+    this.matchId = '',
     required this.result,
-    required this.hero,
+    required this.heroId,
     required this.kda,
-    required this.items,
+    required this.itemIds,
     required this.players,
     required this.date,
     this.duration = '00:00',
     this.role = 'unknown',
-    this.spell = 'none',
+    this.spellId = 0,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'match_id': matchId,
       'result': result,
-      'hero': hero,
+      'hero': heroId.toString(),
       'kda': kda,
-      'items': items,
+      'items': itemIds.join(','),
       'players': players,
       'date': date.toIso8601String(),
       'duration': duration,
       'role': role,
-      'spell': spell,
+      'spell': spellId.toString(),
     };
   }
 
   factory GameStats.fromMap(Map<String, dynamic> map) {
+    List<int> parsedItems = [];
+    if (map['items'] != null && map['items'].toString().isNotEmpty) {
+      parsedItems = map['items'].toString().split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
+    }
+
     return GameStats(
       id: map['id'],
+      matchId: map['match_id'] ?? '',
       result: map['result'],
-      hero: map['hero'],
+      heroId: int.tryParse(map['hero'] ?? '0') ?? 0,
       kda: map['kda'],
-      items: map['items'],
+      itemIds: parsedItems,
       players: map['players'],
       date: DateTime.parse(map['date']),
       duration: map['duration'] ?? '00:00',
       role: map['role'] ?? 'unknown',
-      spell: map['spell'] ?? 'none',
+      spellId: int.tryParse(map['spell'] ?? '0') ?? 0,
     );
   }
 }

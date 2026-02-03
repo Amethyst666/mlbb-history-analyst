@@ -30,16 +30,14 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_searchType == 'Player') {
       results = await _dbHelper.getGamesByPlayer(query);
     } else {
-      // 1. Convert user query (e.g., "Лейла") to ID (e.g., "layla")
+      // 1. Convert user query to ID
       final heroId = DataUtils.getHeroIdByName(query);
       
       // 2. Search by ID
-      results = await _dbHelper.getGamesByHero(heroId);
-      
-      // 3. Fallback: If no results by ID, search by raw name (for old records)
-      if (results.isEmpty) {
-        final rawResults = await _dbHelper.getGamesByHero(query);
-        results = rawResults;
+      if (heroId != 0) {
+        results = await _dbHelper.getGamesByHero(heroId);
+      } else {
+        results = [];
       }
     }
 
@@ -105,14 +103,13 @@ class _SearchScreenState extends State<SearchScreen> {
                     final game = _searchResults[index];
                     final isVictory = game.result == 'VICTORY';
                     
-                    // Translate ID for display
-                    final heroName = DataUtils.getLocalizedHeroName(game.hero, context);
+                    final heroName = DataUtils.getLocalizedHeroName(game.heroId, context);
 
                     return ListTile(
                       onTap: () {
                          Navigator.push(context, MaterialPageRoute(builder: (c) => GameDetailsScreen(game: game)));
                       },
-                      leading: DataUtils.getHeroIcon(game.hero, radius: 20),
+                      leading: DataUtils.getHeroIcon(game.heroId, radius: 20),
                       title: Text('$heroName (${isVictory ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat')})'),
                       subtitle: Text(
                           '${AppStrings.get(context, 'kda')}: ${game.kda}'),
