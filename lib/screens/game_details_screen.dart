@@ -124,10 +124,17 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
                             ],
                           ),
                         ),
+                        if (game.matchId.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "#${game.matchId}",
+                            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, fontFamily: 'monospace'),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Text(
-                          game.date.toString().substring(0, 10),
-                          style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                          "${game.date.toString().substring(0, 10)} (${game.date.toString().substring(11, 16)} - ${game.endDate?.toString().substring(11, 16) ?? '??:??'})  •  ${game.duration}",
+                          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
                         ),
                       ],
                     ),

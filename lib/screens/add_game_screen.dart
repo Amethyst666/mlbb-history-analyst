@@ -8,14 +8,11 @@ import '../utils/game_data.dart';
 import '../utils/database_helper.dart';
 import '../utils/history_parser.dart';
 import '../utils/data_utils.dart';
-import '../widgets/hero_picker.dart';
-import '../widgets/item_picker.dart';
 
 class AddGameScreen extends StatefulWidget {
   final VoidCallback? onSaveSuccess;
-  final GameStats? initialGame;
 
-  const AddGameScreen({super.key, this.onSaveSuccess, this.initialGame});
+  const AddGameScreen({super.key, this.onSaveSuccess});
 
   @override
   State<AddGameScreen> createState() => _AddGameScreenState();
@@ -38,27 +35,11 @@ class _AddGameScreenState extends State<AddGameScreen> {
   void initState() {
     super.initState();
     _loadUserSettings();
-    if (widget.initialGame != null) _loadInitialGame();
   }
 
   Future<void> _loadUserSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() => _userId = prefs.getString('userId'));
-  }
-
-  Future<void> _loadInitialGame() async {
-    final game = widget.initialGame!;
-    final players = await _dbHelper.getPlayersForGame(game.id!);
-    setState(() {
-      gameResult = game.result; 
-      duration = game.duration; 
-      matchDate = game.date;
-      _matchId = game.matchId;
-      myTeam = players.where((p) => !p.isEnemy).toList();
-      enemyTeam = players.where((p) => p.isEnemy).toList();
-      while (myTeam.length < 5) myTeam.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
-      while (enemyTeam.length < 5) enemyTeam.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
-    });
   }
 
   void _showProcessingDialog() {
@@ -134,10 +115,6 @@ class _AddGameScreenState extends State<AddGameScreen> {
     }
   }
 
-  void _editPlayerStats(int index, bool isEnemy) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Manual edit temporarily disabled in V2")));
-  }
-
   Future<void> _handleSaveGame() async {
     _performSave();
   }
@@ -147,13 +124,12 @@ class _AddGameScreenState extends State<AddGameScreen> {
     try { userStats = [...myTeam, ...enemyTeam].firstWhere((p) => p.isUser); } catch (_) { userStats = null; }
     
     final game = GameStats(
-      id: widget.initialGame?.id, 
       matchId: _matchId ?? '',
       result: gameResult, 
       heroId: userStats?.heroId ?? 0, 
       kda: userStats?.kda ?? '', 
       itemIds: userStats?.itemIds ?? [], 
-      score: userStats?.score ?? 0, // Save user's score/medal
+      score: userStats?.score ?? 0,
       players: '', 
       date: matchDate, 
       duration: duration, 
@@ -161,13 +137,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
       spellId: userStats?.spellId ?? 0
     );
     
-    int resultId;
-    if (widget.initialGame != null) {
-      await _dbHelper.updateGameWithPlayers(game, [...myTeam, ...enemyTeam]);
-      resultId = game.id!;
-    } else {
-      resultId = await _dbHelper.insertGameWithPlayers(game, [...myTeam, ...enemyTeam]);
-    }
+    int resultId = await _dbHelper.insertGameWithPlayers(game, [...myTeam, ...enemyTeam]);
     
     if (resultId == -1) {
        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Игра уже существует!"), backgroundColor: Colors.red));
@@ -181,7 +151,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.initialGame != null ? "Edit Match" : "Add Match (File)")),
+      appBar: AppBar(title: const Text("Добавить матч")),
       body: ListView(children: [
         Padding(
           padding: const EdgeInsets.all(16),
@@ -231,7 +201,6 @@ class _AddGameScreenState extends State<AddGameScreen> {
         if (p.itemIds.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Wrap(spacing: 4, children: p.itemIds.map((item) => SizedBox(width: 24, height: 24, child: DataUtils.getItemIcon(item, size: 24))).toList())),
       ]),
       trailing: DataUtils.getSpellIcon(DataUtils.getDisplaySpellId(p.spellId, p.itemIds), size: 24),
-      onTap: () => _editPlayerStats(i, isEnemy),
     );
   }
 }

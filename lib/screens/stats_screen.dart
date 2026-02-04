@@ -70,8 +70,13 @@ class _StatsScreenState extends State<StatsScreen> {
                       final game = _games[index];
                       return ListTile(
                         leading: DataUtils.getHeroIcon(game.heroId, radius: 20),
-                        title: Text('${DataUtils.getLocalizedHeroName(game.heroId, context)} - ${game.kda}'),
-                        subtitle: Text('Players: ${game.players}\nDate: ${game.date.toString().substring(0, 16)}'),
+                        title: Row(
+                          children: [
+                            Text('${DataUtils.getLocalizedHeroName(game.heroId, context)} - ${game.kda} • '),
+                            DataUtils.getMedalIcon(game.score, size: 14),
+                          ],
+                        ),
+                        subtitle: Text('Players: ${game.players}\nDate: ${game.date.toString().substring(0, 10)}'),
                         isThreeLine: true,
                       );
                     },

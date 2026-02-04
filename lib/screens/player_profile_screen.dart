@@ -281,7 +281,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             const Text(" • ", style: TextStyle(color: Colors.white24)),
             Text("KDA: $kda", style: const TextStyle(fontSize: 11)),
             const Text(" • ", style: TextStyle(color: Colors.white24)),
-            Text("⭐ $score", style: const TextStyle(fontSize: 11)),
+            DataUtils.getMedalIcon(score.toInt(), size: 14),
           ],
         ),
         trailing: Column(

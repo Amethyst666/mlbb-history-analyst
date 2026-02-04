@@ -24,7 +24,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'game_stats.db');
     return await openDatabase(
       path,
-      version: 17, 
+      version: 18, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -39,12 +39,10 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         result TEXT, hero TEXT, kda TEXT, items TEXT, players TEXT,
         date TEXT, duration TEXT, role TEXT, spell TEXT,
-        match_id TEXT, score INTEGER DEFAULT 0
+        match_id TEXT, score INTEGER DEFAULT 0,
+        end_date TEXT
       )
     ''');
-// ... rest of onCreate same ...
-
-    // Add unique index for match_id to prevent duplicates
     await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games(match_id) WHERE match_id IS NOT NULL AND match_id != ''");
 
     await db.execute('''
@@ -86,42 +84,57 @@ class DatabaseHelper {
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 12) {
-      await db.execute('ALTER TABLE game_players ADD COLUMN level INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN gold_lane INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN gold_kill INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN gold_tower INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN gold_roam INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN clan TEXT DEFAULT ""');
-      await db.execute('ALTER TABLE game_players ADD COLUMN party_id INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'level', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'gold_lane', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'gold_kill', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'gold_tower', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'gold_roam', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'clan', 'TEXT DEFAULT ""');
+      await _safeAddColumn(db, 'game_players', 'party_id', 'INTEGER DEFAULT 0');
     }
     if (oldVersion < 13) {
-      await db.execute('ALTER TABLE game_players ADD COLUMN gold_jungle INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN damage_hero INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN damage_tower INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN damage_taken INTEGER DEFAULT 0');
-      await db.execute('ALTER TABLE game_players ADD COLUMN heal INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'gold_jungle', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'damage_hero', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'damage_tower', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'damage_taken', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'heal', 'INTEGER DEFAULT 0');
     }
     if (oldVersion < 14) {
-      await db.execute('ALTER TABLE player_profiles ADD COLUMN game_account_id TEXT');
+      await _safeAddColumn(db, 'player_profiles', 'game_account_id', 'TEXT');
     }
     if (oldVersion < 15) {
-      await db.execute('ALTER TABLE games ADD COLUMN match_id TEXT');
+      await _safeAddColumn(db, 'games', 'match_id', 'TEXT');
     }
     if (oldVersion < 16) {
       // Remove duplicates before creating unique index
-      await db.execute('''
-        DELETE FROM games 
-        WHERE match_id != '' AND match_id IS NOT NULL 
-        AND id NOT IN (
-          SELECT MIN(id) FROM games 
+      try {
+        await db.execute('''
+          DELETE FROM games 
           WHERE match_id != '' AND match_id IS NOT NULL 
-          GROUP BY match_id
-        )
-      ''');
-      await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games(match_id) WHERE match_id IS NOT NULL AND match_id != ''");
+          AND id NOT IN (
+            SELECT MIN(id) FROM games 
+            WHERE match_id != '' AND match_id IS NOT NULL 
+            GROUP BY match_id
+          )
+        ''');
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games(match_id) WHERE match_id IS NOT NULL AND match_id != ''");
+      } catch (e) {
+        debugPrint("Error creating unique index: $e");
+      }
     }
     if (oldVersion < 17) {
-      await db.execute('ALTER TABLE games ADD COLUMN score INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'games', 'score', 'INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 18) {
+      await _safeAddColumn(db, 'games', 'end_date', 'TEXT');
+    }
+  }
+
+  Future<void> _safeAddColumn(Database db, String table, String column, String type) async {
+    try {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $type');
+    } catch (e) {
+      debugPrint("Column $column already exists in $table or error: $e");
     }
   }
 
@@ -277,7 +290,7 @@ class DatabaseHelper {
       FROM games g
       JOIN game_players gp ON g.id = gp.game_id
       WHERE gp.profile_id = ?
-      ORDER BY g.date DESC
+      ORDER BY COALESCE(g.end_date, g.date) DESC
     ''', [profileId]);
   }
 
@@ -387,26 +400,10 @@ class DatabaseHelper {
     }
   }
 
-  Future<void> updateGameWithPlayers(GameStats game, List<PlayerStats> players) async {
-    if (game.id == null) return;
-    Database db = await database;
-    await db.transaction((txn) async {
-      for (int i = 0; i < players.length; i++) {
-        int pid = await _getOrCreateProfileTxn(txn, players[i].nickname, forceIsUser: players[i].isUser, gameAccountId: players[i].playerId);
-        players[i] = players[i].copyWith(profileId: pid);
-      }
-      await txn.update('games', game.toMap(), where: 'id = ?', whereArgs: [game.id]);
-      await txn.delete('game_players', where: 'game_id = ?', whereArgs: [game.id]);
-      for (var p in players) {
-        var map = p.toMap(); map['game_id'] = game.id;
-        await txn.insert('game_players', map);
-      }
-    });
-  }
-
   Future<List<GameStats>> getGames() async {
     Database db = await database;
-    List<Map<String, dynamic>> maps = await db.query('games', orderBy: 'date DESC');
+    // Order by end_date if available, then date
+    List<Map<String, dynamic>> maps = await db.query('games', orderBy: 'COALESCE(end_date, date) DESC');
     return maps.map((m) => GameStats.fromMap(m)).toList();
   }
 
@@ -425,12 +422,12 @@ class DatabaseHelper {
     ''', ['%${playerName.toLowerCase()}%']);
     if (playerMatches.isEmpty) return [];
     String ids = playerMatches.map((m) => m['game_id']).join(',');
-    return (await db.rawQuery('SELECT * FROM games WHERE id IN ($ids) ORDER BY date DESC')).map((m) => GameStats.fromMap(m)).toList();
+    return (await db.rawQuery('SELECT * FROM games WHERE id IN ($ids) ORDER BY COALESCE(end_date, date) DESC')).map((m) => GameStats.fromMap(m)).toList();
   }
 
   Future<List<GameStats>> getGamesByHero(int heroId) async {
     Database db = await database;
-    List<Map<String, dynamic>> maps = await db.query('games', where: 'hero = ?', whereArgs: [heroId.toString()], orderBy: 'date DESC');
+    List<Map<String, dynamic>> maps = await db.query('games', where: 'hero = ?', whereArgs: [heroId.toString()], orderBy: 'COALESCE(end_date, date) DESC');
     return maps.map((m) => GameStats.fromMap(m)).toList();
   }
 }

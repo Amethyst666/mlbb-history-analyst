@@ -31,16 +31,14 @@ class HistoryParser {
   static Future<ParsedGameData?> parseFile(File file, {String? userGameId, String? matchId}) async {
     try {
       final String content = await file.readAsString();
-      final Uint8List data = base64Decode(content);
+      final Uint8List data = base64Decode(content.trim());
       
       List<PlayerStats> playersList = [];
-      DateTime date = await file.lastModified(); 
 
       int cursor = 0;
       int winnerTeamId = 0;
       int myTeamId = 0;
 
-      // Temporary list to hold parsed data before setting relative flags (enemy/victory)
       List<Map<String, dynamic>> tempPlayers = [];
 
       while (cursor < data.length - 1) {
@@ -57,11 +55,9 @@ class HistoryParser {
         cursor = startBlock + 2; // Move past 70 50
 
         // 2. Parse Items
-        // Format: [Count] [00] [Item1_Lo] [Item1_Hi] [00] [Item2_Lo] [Item2_Hi] ...
         List<int> itemIds = [];
         if (cursor < data.length) {
           int itemCount = data[cursor];
-          debugPrint("Player found. Item count: $itemCount, Cursor: $cursor");
           cursor++; 
           cursor++; // Skip empty byte
           
@@ -78,44 +74,34 @@ class HistoryParser {
               cursor++;
             }
             
-            // Stop conditions:
-            // 1. Reached itemCount (handled by loop)
-            // 2. Next byte is 0x01
+            // Stop if next is 01 (KDA block)
             if (cursor < data.length && data[cursor] == 0x01) {
-               debugPrint("Hit 0x01 marker after item $k and skipping zeros. Ending items.");
                break;
             }
           }
         }
-        
-        debugPrint("Cursor after items: $cursor. Next bytes: ${data.sublist(cursor, cursor + 5 > data.length ? data.length : cursor + 5)}");
 
         // 3. Parse KDA & Hero
-        // Format: 01 [byte] 02 [HID] 03 [K] 04 [D] 05 [A] 06 [Lvl]
         int heroId = 0;
         int k = 0, d = 0, a = 0;
         int level = 0;
+        int totalGoldFromTag8 = 0;
 
         if (cursor < data.length && data[cursor] == 0x01) {
-          cursor += 2; // Skip 01 and the "unnecessary byte"
-          
+          cursor += 2; 
           while (cursor < data.length) {
             int tag = data[cursor];
-            debugPrint("Found tag: $tag at $cursor");
-            
-            if (tag == 0x02) { var r = _rv(data, cursor + 1); heroId = r.$1; cursor = r.$2; debugPrint("Hero: $heroId"); }
-            else if (tag == 0x03) { var r = _rv(data, cursor + 1); k = r.$1; cursor = r.$2; debugPrint("K: $k"); }
-            else if (tag == 0x04) { var r = _rv(data, cursor + 1); d = r.$1; cursor = r.$2; debugPrint("D: $d"); }
-            else if (tag == 0x05) { var r = _rv(data, cursor + 1); a = r.$1; cursor = r.$2; debugPrint("A: $a"); }
-            else if (tag == 0x06) { var r = _rv(data, cursor + 1); level = r.$1; cursor = r.$2; debugPrint("Lvl: $level"); }
+            if (tag == 0x02) { var r = _rv(data, cursor + 1); heroId = r.$1; cursor = r.$2; }
+            else if (tag == 0x03) { var r = _rv(data, cursor + 1); k = r.$1; cursor = r.$2; }
+            else if (tag == 0x04) { var r = _rv(data, cursor + 1); d = r.$1; cursor = r.$2; }
+            else if (tag == 0x05) { var r = _rv(data, cursor + 1); a = r.$1; cursor = r.$2; }
+            else if (tag == 0x06) { var r = _rv(data, cursor + 1); level = r.$1; cursor = r.$2; }
+            else if (tag == 0x07) { var r = _rv(data, cursor + 1); cursor = r.$2; }
+            else if (tag == 0x08) { var r = _rv(data, cursor + 1); totalGoldFromTag8 = r.$1; cursor = r.$2; } 
             else {
-              // We hit unknown bytes after KDA block, break loop to scan for Name/Fields
-              debugPrint("Unknown tag $tag at $cursor. Breaking KDA loop.");
               break; 
             }
           }
-        } else {
-           debugPrint("Expected 0x01 at $cursor but found ${data[cursor]}");
         }
 
         // 4. Find End of Block (5F 58) to limit search
@@ -128,30 +114,25 @@ class HistoryParser {
         }
         if (endBlock == -1) endBlock = data.length;
 
-        // 5. Parse Name, ID and Fields within this range
+        // 5. Parse Name, ID and Fields
         String name = "Unknown";
         String clanName = "";
         String playerIdStr = "";
         Map<int, int> fields = {};
         bool seenClanId = false;
         
-        // Scan cursor -> endBlock
         int localCursor = cursor;
         while (localCursor < endBlock) {
           int byte = data[localCursor];
 
-          // Name Check: 0x4D [Len] [String]
           if (byte == 0x4d && localCursor + 1 < endBlock) {
              int len = data[localCursor + 1];
              if (len > 0 && len < 50 && (localCursor + 2 + len) <= endBlock) {
                 try {
                   String potentialName = utf8.decode(data.sublist(localCursor + 2, localCursor + 2 + len));
-                  // Basic validation
                   if (potentialName.runes.every((r) => r >= 32)) {
                     name = potentialName;
                     localCursor += 2 + len;
-                    
-                    // Strict ID Check: Look for 0x0E immediately after name
                     if (localCursor < endBlock && data[localCursor] == 0x0e) {
                        var res = _rv(data, localCursor + 1);
                        playerIdStr = res.$1.toString();
@@ -163,7 +144,6 @@ class HistoryParser {
              }
           }
           
-          // ID Check: 0x0E [VarInt]
           if (byte == 0x0e) {
             var res = _rv(data, localCursor + 1);
             playerIdStr = res.$1.toString();
@@ -171,27 +151,20 @@ class HistoryParser {
             continue;
           }
 
-          // Fields Check: 0x0F [Tag] [VarInt]
           if (byte == 0x0f && localCursor + 1 < endBlock) {
             int fid = data[localCursor + 1];
             var res = _rv(data, localCursor + 2);
             fields[fid] = res.$1;
             localCursor = res.$2;
-            
             if (fid == 30) seenClanId = true;
             continue;
           }
           
-          // Clan Name Search: If we saw Clan ID (30) recently, check for string
-          // Assuming format: [Tag] [Len] [String]
-          // Tag is unknown, but likely 0x32, 0x3A, or just any byte that isn't 0F/0E
           if (seenClanId && clanName.isEmpty && localCursor + 1 < endBlock) {
              int len = data[localCursor + 1];
-             // Heuristic: Length must be reasonable for a clan name (e.g., 2-15 chars)
              if (len >= 2 && len <= 20 && (localCursor + 2 + len) <= endBlock) {
                 try {
                    String potentialClan = utf8.decode(data.sublist(localCursor + 2, localCursor + 2 + len));
-                   // Strict validation for clan name characters
                    if (potentialClan.runes.every((r) => r >= 32)) {
                       clanName = potentialClan;
                       localCursor += 2 + len;
@@ -200,33 +173,22 @@ class HistoryParser {
                 } catch (_) {}
              }
           }
-
           localCursor++;
         }
 
         // 6. Assemble Player Stats
-        int goldJungle = fields[82] ?? 0;
-        int goldKill = fields[86] ?? 0;
-        int goldLane = fields[87] ?? 0;
-        int gold = goldJungle + goldKill + goldLane;
-        
+        int gold = totalGoldFromTag8;
         int damageHero = fields[19] ?? 0;
         int damageTower = fields[20] ?? 0;
         int damageTaken = fields[21] ?? 0;
         int heal = (fields[84] ?? 0) + (fields[85] ?? 0);
-
-        // Score field 18 is Medal. 1=MVP, 2=Gold, 3=Silver, 4=Bronze
         int score = fields[18] ?? 0; 
         
-        // Extra info
         String clanIdStr = (fields[30] ?? 0).toString();
         if (clanIdStr == '0') clanIdStr = '';
-        
-        // Combine Clan Name and ID if available
         String finalClanStr = clanName.isNotEmpty ? "$clanName [$clanIdStr]" : (clanIdStr.isNotEmpty ? clanIdStr : '');
         
         int lobbyId = fields[34] ?? 0;
-
         int roleId = fields[77] ?? fields[76] ?? 0;
         String role = 'unknown';
         if (roleId == 1) role = 'exp';
@@ -236,37 +198,20 @@ class HistoryParser {
         else if (roleId == 5) role = 'gold';
 
         int teamId = fields[22] ?? 0;
-        
-        // Score field 18 is Medal. 1=MVP
-        int medal = fields[18] ?? 0;
-        if (medal == 1) {
-          winnerTeamId = teamId;
-        }
+        if (score == 1) winnerTeamId = teamId;
 
-        // Check if this is user
         bool isMe = false;
-        debugPrint("Player: $name, ID: $playerIdStr, Team: $teamId. Searching for UserID: $userGameId");
         if (userGameId != null && playerIdStr == userGameId.trim()) {
           isMe = true;
           myTeamId = teamId;
-          debugPrint(">>> FOUND USER! Team ID: $myTeamId");
         }
 
         int fieldSpellId = fields[15] ?? 0;
-        
-        // Check for Spells/Blessings in item list
         int finalSpellId = fieldSpellId;
         List<int> cleanItems = [];
-        
         for (var it in itemIds) {
            final spellEntity = GameData.getSpell(it);
-           
-           if (spellEntity != null) {
-             // If we find a raw blessing ID in items, it's the spell
-             finalSpellId = it;
-           } else {
-             cleanItems.add(it);
-           }
+           if (spellEntity != null) finalSpellId = it; else cleanItems.add(it);
         }
 
         tempPlayers.add({
@@ -277,16 +222,16 @@ class HistoryParser {
             gold: gold.toString(),
             itemIds: cleanItems,
             score: score,
-            isEnemy: false, // Calculated later
+            isEnemy: false, 
             isUser: isMe, 
             role: role,
             spellId: finalSpellId,
             playerId: playerIdStr,
             teamId: teamId,
             level: level,
-            goldLane: goldLane,
-            goldKill: goldKill,
-            goldJungle: goldJungle,
+            goldLane: fields[87] ?? 0,
+            goldKill: fields[86] ?? 0,
+            goldJungle: fields[82] ?? 0,
             damageHero: damageHero,
             damageTower: damageTower,
             damageTaken: damageTaken,
@@ -295,36 +240,71 @@ class HistoryParser {
             partyId: lobbyId,
           )
         });
-
         cursor = endBlock + 2; 
       }
 
-      // Search for Match ID in the footer (after last player)
+      // --- Precise Duration and Match ID Search ---
       String? foundMatchId;
-      int footerCursor = cursor;
+      int durSecs = 0;
       
-      // Heuristic: Scan for a string of digits (length > 10)
-      // Usually strings are prefixed by length byte, or just raw bytes in some formats.
-      // Assuming VarInt string format: [Tag] [Len] [String] or just [Len] [String]
-      
-      while (footerCursor < data.length - 10) {
-         // Check for Length Byte + String
-         int len = data[footerCursor];
-         if (len > 10 && len < 30 && (footerCursor + 1 + len) <= data.length) {
-            try {
-               String s = utf8.decode(data.sublist(footerCursor + 1, footerCursor + 1 + len));
-               // Check if it's numeric and looks like a Match ID
-               if (RegExp(r'^\d{10,}').hasMatch(s)) {
-                  foundMatchId = s;
-                  debugPrint("Found Match ID in file: $s at offset $footerCursor");
-                  break;
-               }
-            } catch (_) {}
-         }
-         footerCursor++;
+      // 1. Find Match ID string position
+      int matchIdPos = -1;
+      for (int i = cursor; i < data.length - 15; i++) {
+        bool isDigit = true;
+        for (int j = 0; j < 15; j++) {
+          if (data[i + j] < 48 || data[i + j] > 57) { isDigit = false; break; }
+        }
+        if (isDigit) {
+          matchIdPos = i;
+          int endId = i;
+          while (endId < data.length && data[endId] >= 48 && data[endId] <= 57) { endId++; }
+          foundMatchId = utf8.decode(data.sublist(i, endId));
+          break;
+        }
       }
 
-      // Final pass to set relative stats
+      // 2. Search for Precise Duration (Tag 04) in the gap before Match ID
+      if (matchIdPos != -1) {
+        int gapSearch = cursor;
+        while (gapSearch < matchIdPos - 1) {
+          if (data[gapSearch] == 0x04) {
+            var res = _rv(data, gapSearch + 1);
+            int val = res.$1;
+            // val is duration in milliseconds
+            if (val > 300000 && val < 4000000) {
+              durSecs = val ~/ 1000;
+              break;
+            }
+          }
+          gapSearch++;
+        }
+      }
+
+      // 3. Fallback to Footer Tags (0x0E) if durSecs still 0
+      if (durSecs == 0) {
+        int footerCursor = matchIdPos != -1 ? matchIdPos : cursor;
+        while (footerCursor < data.length - 1) {
+          if (data[footerCursor] == 0x0e) {
+            var res = _rv(data, footerCursor + 1);
+            durSecs = res.$1;
+            break;
+          }
+          footerCursor++;
+        }
+      }
+
+      // Time Calculation
+      var (endTs, _) = _rv(data, 2);
+      DateTime endTime = DateTime.fromMillisecondsSinceEpoch(endTs * 1000);
+      DateTime startTime = durSecs > 0 ? endTime.subtract(Duration(seconds: durSecs)) : endTime;
+      
+      String formattedDuration = "00:00";
+      if (durSecs > 0) {
+        int mins = durSecs ~/ 60;
+        int secs = durSecs % 60;
+        formattedDuration = "${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
+      }
+
       String gameResult = 'DEFEAT';
       if (myTeamId != 0 && winnerTeamId != 0) {
         if (myTeamId == winnerTeamId) gameResult = 'VICTORY';
@@ -333,26 +313,24 @@ class HistoryParser {
       for (var pMap in tempPlayers) {
         PlayerStats p = pMap['stats'];
         bool isEnemy = false;
-        if (myTeamId != 0) {
-          isEnemy = p.teamId != myTeamId;
-        }
+        if (myTeamId != 0) isEnemy = p.teamId != myTeamId;
         playersList.add(p.copyWith(isEnemy: isEnemy));
       }
 
-      // Determine main hero for the game record (User's hero or MVP or first)
       var mainPlayer = playersList.firstWhere((p) => p.isUser, orElse: () => playersList.first);
 
       return ParsedGameData(
         game: GameStats(
-          matchId: foundMatchId ?? matchId ?? "", // Prefer found ID, then argument
+          matchId: foundMatchId ?? matchId ?? "",
           result: gameResult,
           heroId: mainPlayer.heroId, 
           kda: mainPlayer.kda,
           itemIds: mainPlayer.itemIds,
-          score: mainPlayer.score, // Populate score from main player (user)
+          score: mainPlayer.score,
           players: playersList.map((p) => p.nickname).join(', '),
-          date: date,
-          duration: "00:00", 
+          date: startTime, 
+          endDate: endTime, 
+          duration: formattedDuration, 
         ),
         players: playersList,
       );

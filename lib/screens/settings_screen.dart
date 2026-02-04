@@ -155,15 +155,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeColor: Colors.deepPurpleAccent,
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.collections),
-            title: const Text('Asset Gallery'),
-            subtitle: const Text('Check icons'),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const AssetGalleryScreen()));
-            },
-          ),
           if (_isDeveloperMode) ...[
+            ListTile(
+              leading: const Icon(Icons.collections),
+              title: const Text('Asset Gallery'),
+              subtitle: const Text('Check icons'),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const AssetGalleryScreen()));
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.person_remove, color: Colors.orangeAccent),
               title: const Text('Очистить базу игроков'),

@@ -175,11 +175,12 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                       ).toList(),
                     ),
                   ] else
-                    Text(game.date.toString().substring(0, 10)),
+                    Text((game.endDate ?? game.date).toString().substring(0, 16)),
                 ],
               ),
               isThreeLine: !noUser,
               trailing: Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -187,26 +188,8 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                       style: TextStyle(
                           color: isVictory ? Colors.green : Colors.red,
                           fontWeight: FontWeight.bold)),
-                  if (_isDeveloperMode)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AddGameScreen(
-                              initialGame: game,
-                              onSaveSuccess: () {
-                                _loadData();
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Icon(Icons.edit, size: 20, color: Colors.blueGrey),
-                      ),
-                    ),
+                  const SizedBox(height: 2),
+                  Text(game.duration, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                 ],
               ),
             ),
