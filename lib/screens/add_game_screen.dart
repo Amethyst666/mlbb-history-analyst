@@ -8,6 +8,7 @@ import '../utils/game_data.dart';
 import '../utils/database_helper.dart';
 import '../utils/history_parser.dart';
 import '../utils/data_utils.dart';
+import '../utils/app_strings.dart';
 
 class AddGameScreen extends StatefulWidget {
   final VoidCallback? onSaveSuccess;
@@ -27,180 +28,150 @@ class _AddGameScreenState extends State<AddGameScreen> {
   String gameResult = 'VICTORY';
   String duration = '00:00';
   DateTime matchDate = DateTime.now();
-
-  List<PlayerStats> myTeam = List.generate(5, (i) => PlayerStats(nickname: 'Player ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
-  List<PlayerStats> enemyTeam = List.generate(5, (i) => PlayerStats(nickname: 'Enemy ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
+  List<PlayerStats> players = [];
+  bool _isParsing = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUserSettings();
+    _loadUserId();
   }
 
-  Future<void> _loadUserSettings() async {
+  Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _userId = prefs.getString('userId'));
+    setState(() {
+      _userId = prefs.getString('userGameId');
+    });
   }
 
-  void _showProcessingDialog() {
-    showDialog(context: context, barrierDismissible: false, builder: (c) => const AlertDialog(content: Row(children: [CircularProgressIndicator(), SizedBox(width: 20), Text("Parsing History...")] )));
-  }
-
-  void _showErrorDialog(String msg) {
-    showDialog(context: context, builder: (c) => AlertDialog(title: const Text("Error"), content: Text(msg), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))]));
-  }
-
-  Future<void> _pickHistoryFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
+  Future<void> _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+    );
 
     if (result != null) {
-      final path = result.files.single.path!;
-      final filename = result.files.single.name;
+      File file = File(result.files.single.path!);
+      String fileName = result.files.single.name;
       
+      String mId = fileName;
+      if (fileName.contains('-')) {
+        mId = fileName.split('-').last;
+      }
+      mId = mId.replaceAll(RegExp(r'\..*$'), '');
+
       setState(() {
-        _file = File(path);
-        if (filename.startsWith('His-')) {
-          var parts = filename.split('-');
-          if (parts.length >= 3) _matchId = parts.last.split('.').first;
-        }
+        _file = file;
+        _matchId = mId;
+        _isParsing = true;
       });
 
-      _showProcessingDialog();
-      await Future.delayed(const Duration(milliseconds: 300));
-      try {
-        final parsedData = await HistoryParser.parseFile(_file!, userGameId: _userId, matchId: _matchId);
-        if (parsedData != null) {
-          setState(() {
-            gameResult = parsedData.game.result;
-            duration = parsedData.game.duration;
-            
-            final allPlayers = parsedData.players;
-            
-            int myTeamId = -1;
-            try {
-              final me = allPlayers.firstWhere((p) => p.isUser);
-              myTeamId = me.teamId;
-            } catch (_) {
-              if (_userId != null && _userId!.isNotEmpty) {
-                try {
-                  final me = allPlayers.firstWhere((p) => p.playerId == _userId);
-                  myTeamId = me.teamId;
-                } catch (_) {}
-              }
-            }
-            
-            if (myTeamId == -1 && allPlayers.isNotEmpty) {
-               myTeamId = allPlayers.first.teamId;
-            }
-
-            List<PlayerStats> allies = [];
-            List<PlayerStats> enemies = [];
-
-            for (var p in allPlayers) {
-              bool isMe = (p.playerId == _userId);
-              bool isAlly = (p.teamId == myTeamId);
-              final updated = p.copyWith(isEnemy: !isAlly, isUser: isMe);
-              if (isAlly) allies.add(updated); else enemies.add(updated);
-            }
-
-            while (allies.length < 5) allies.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false));
-            while (enemies.length < 5) enemies.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false));
-
-            myTeam = allies;
-            enemyTeam = enemies;
-          });
+      final parsed = await HistoryParser.parseFile(file, userGameId: _userId, matchId: _matchId);
+      
+      if (parsed != null) {
+        setState(() {
+          gameResult = parsed.game.result;
+          duration = parsed.game.duration;
+          matchDate = parsed.game.date;
+          players = parsed.players;
+          _isParsing = false;
+        });
+      } else {
+        setState(() => _isParsing = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to parse history file.")),
+          );
         }
-        if (mounted) Navigator.pop(context);
-      } catch (e) { if (mounted) { Navigator.pop(context); _showErrorDialog("$e"); } }
+      }
     }
   }
 
-  Future<void> _handleSaveGame() async {
-    _performSave();
-  }
+  Future<void> _saveGame() async {
+    if (players.isEmpty) return;
 
-  Future<void> _performSave() async {
-    PlayerStats? userStats;
-    try { userStats = [...myTeam, ...enemyTeam].firstWhere((p) => p.isUser); } catch (_) { userStats = null; }
-    
     final game = GameStats(
-      matchId: _matchId ?? '',
-      result: gameResult, 
-      heroId: userStats?.heroId ?? 0, 
-      kda: userStats?.kda ?? '', 
-      itemIds: userStats?.itemIds ?? [], 
-      score: userStats?.score ?? 0,
-      players: '', 
-      date: matchDate, 
-      duration: duration, 
-      role: userStats?.role ?? 'unknown', 
-      spellId: userStats?.spellId ?? 0
+      matchId: _matchId ?? "",
+      result: gameResult,
+      heroId: players.firstWhere((p) => p.isUser, orElse: () => players.first).heroId,
+      kda: players.firstWhere((p) => p.isUser, orElse: () => players.first).kda,
+      itemIds: players.firstWhere((p) => p.isUser, orElse: () => players.first).itemIds,
+      score: players.firstWhere((p) => p.isUser, orElse: () => players.first).score,
+      players: players.map((p) => p.nickname).join(', '),
+      date: matchDate,
+      duration: duration,
     );
-    
-    int resultId = await _dbHelper.insertGameWithPlayers(game, [...myTeam, ...enemyTeam]);
-    
-    if (resultId == -1) {
-       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Игра уже существует!"), backgroundColor: Colors.red));
-       return;
-    }
 
-    if (widget.onSaveSuccess != null) widget.onSaveSuccess!();
-    if (mounted) { if (Navigator.canPop(context)) Navigator.pop(context); else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Match saved!"))); }
+    int id = await _dbHelper.insertGameWithPlayers(game, players);
+    if (id != -1) {
+      if (widget.onSaveSuccess != null) widget.onSaveSuccess!();
+      if (mounted) Navigator.pop(context);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error saving game. Possibly duplicate match ID.")),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Добавить матч")),
-      body: ListView(children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: DropdownButton<String>(
-            value: gameResult, 
-            isExpanded: true,
-            items: const [
-              DropdownMenuItem(value: 'VICTORY', child: Text("VICTORY", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))), 
-              DropdownMenuItem(value: 'DEFEAT', child: Text("DEFEAT", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))
-            ], 
-            onChanged: (v) => setState(() => gameResult = v!)
-          ),
-        ),
-        const Divider(),
-        _buildTeamHeader("MY TEAM", Colors.blue), ...List.generate(5, (i) => _buildPlayerTile(i, false)),
-        const Divider(),
-        _buildTeamHeader("ENEMY TEAM", Colors.red), ...List.generate(5, (i) => _buildPlayerTile(i, true)),
-        const SizedBox(height: 120),
-      ]),
-      floatingActionButton: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-        FloatingActionButton.extended(heroTag: "scan", onPressed: _pickHistoryFile, label: const Text("OPEN FILE"), icon: const Icon(Icons.folder_open), backgroundColor: Colors.white10),
-        const SizedBox(height: 10),
-        FloatingActionButton.extended(heroTag: "save", onPressed: _handleSaveGame, label: const Text("SAVE MATCH"), icon: const Icon(Icons.save), backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
-      ]),
-    );
-  }
-
-  Widget _buildTeamHeader(String label, Color col) => Container(padding: const EdgeInsets.all(8), color: col.withOpacity(0.1), child: Text(label, style: TextStyle(color: col, fontWeight: FontWeight.bold)));
-
-  Widget _buildPlayerTile(int i, bool isEnemy) {
-    final p = isEnemy ? enemyTeam[i] : myTeam[i];
-    return ListTile(
-      leading: Stack(children: [
-        DataUtils.getHeroIcon(p.heroId, radius: 25),
-        Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(1), decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), child: DataUtils.getRoleIcon(p.role, size: 14))),
-      ]),
-      title: Text(p.nickname, style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal, color: p.isUser ? Colors.cyanAccent : Colors.white)),
-      subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
+      appBar: AppBar(title: Text(AppStrings.get(context, 'add'))),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
           children: [
-            Text("KDA: ${p.kda} • ", style: const TextStyle(color: Colors.grey)),
-            DataUtils.getMedalIcon(p.score, size: 14),
+            ElevatedButton.icon(
+              onPressed: _pickFile,
+              icon: const Icon(Icons.file_open),
+              label: Text(_file == null ? "Select History File" : "Change File"),
+            ),
+            if (_file != null) Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text("File: ${_file!.path.split('/').last}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+            const Divider(),
+            if (_isParsing) const Center(child: CircularProgressIndicator()),
+            if (!_isParsing && players.isNotEmpty) ...[
+              Expanded(
+                child: ListView(
+                  children: [
+                    ListTile(
+                      title: Text("Result: $gameResult", style: TextStyle(color: gameResult == 'VICTORY' ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
+                      subtitle: Text("Date: ${matchDate.toString().substring(0, 16)} | Duration: $duration"),
+                    ),
+                    const Divider(),
+                    ...players.map((p) => ListTile(
+                      leading: DataUtils.getHeroIcon(p.heroId, radius: 20),
+                      title: Text(p.nickname, style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal, color: p.isUser ? Colors.cyanAccent : Colors.white)),
+                      subtitle: Row(
+                        children: [
+                          Text("${AppStrings.get(context, 'kda')}: ${p.kda} • "),
+                          DataUtils.getMedalIcon(p.score, size: 14),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 12),
+                          const SizedBox(width: 2),
+                          Text(p.gold, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                        ],
+                      ),
+                    )).toList(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saveGame,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent, foregroundColor: Colors.white),
+                  child: Text(AppStrings.get(context, 'save_match')),
+                ),
+              ),
+            ]
           ],
         ),
-        Text("💰 ${p.gold}", style: const TextStyle(color: Colors.grey)),
-        if (p.itemIds.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Wrap(spacing: 4, children: p.itemIds.map((item) => SizedBox(width: 24, height: 24, child: DataUtils.getItemIcon(item, size: 24))).toList())),
-      ]),
-      trailing: DataUtils.getSpellIcon(DataUtils.getDisplaySpellId(p.spellId, p.itemIds), size: 24),
+      ),
     );
   }
 }

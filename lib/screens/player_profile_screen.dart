@@ -5,6 +5,7 @@ import '../utils/database_helper.dart';
 import '../utils/data_utils.dart';
 import '../utils/app_strings.dart';
 import 'game_details_screen.dart';
+import 'player_settings_screen.dart';
 
 class PlayerProfileScreen extends StatefulWidget {
   final PlayerProfile profile;
@@ -31,9 +32,14 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   }
 
   Future<void> _loadStats() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    
     final stats = await _dbHelper.getHeroStatsForProfile(widget.profile.id!);
     final games = await _dbHelper.getGamesForProfile(widget.profile.id!);
+    
+    final profiles = await _dbHelper.getAllProfiles();
+    final updatedProfile = profiles.firstWhere((p) => p.id == widget.profile.id, orElse: () => widget.profile);
     
     int ally = 0;
     int enemy = 0;
@@ -44,6 +50,9 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
     if (mounted) {
       setState(() {
+        widget.profile.pinnedAlias = updatedProfile.pinnedAlias;
+        widget.profile.mainNickname = updatedProfile.mainNickname;
+        widget.profile.serverId = updatedProfile.serverId;
         _heroStats = stats;
         _playerGames = games;
         _totalAllyGames = ally;
@@ -55,9 +64,19 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String displayName = widget.profile.pinnedAlias ?? widget.profile.mainNickname;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.profile.mainNickname),
+        title: Text(displayName),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (c) => PlayerSettingsScreen(profile: widget.profile)));
+              _loadStats();
+            },
+          ),
+        ],
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator())
@@ -71,7 +90,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 const SizedBox(height: 30),
               ],
               if (_playerGames.isNotEmpty) ...[
-                const Text("ИСТОРИЯ ИГР", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+                Text(AppStrings.get(context, 'history'), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
                 const SizedBox(height: 10),
                 ..._playerGames.map((g) => _buildGameTile(g)).toList(),
               ],
@@ -82,6 +101,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   }
 
   Widget _buildHeader() {
+    String displayName = widget.profile.pinnedAlias ?? widget.profile.mainNickname;
     return Center(
       child: Column(
         children: [
@@ -91,11 +111,13 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             child: Icon(widget.profile.isUser ? Icons.person : Icons.people, size: 45, color: Colors.black),
           ),
           const SizedBox(height: 15),
-          Text(widget.profile.mainNickname, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          if (widget.profile.pinnedAlias != null)
+            Text("(${widget.profile.mainNickname})", style: const TextStyle(color: Colors.white24, fontSize: 14)),
           const SizedBox(height: 4),
-          Text("ID: ${widget.profile.id}", style: const TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'monospace')),
+          Text("ID: ${widget.profile.id} (${widget.profile.serverId})", style: const TextStyle(color: Colors.white54, fontSize: 12, fontFamily: 'monospace')),
           const SizedBox(height: 4),
-          Text(widget.profile.isUser ? "Ваш профиль" : "Профиль игрока", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(widget.profile.isUser ? AppStrings.get(context, 'your_profile') : AppStrings.get(context, 'player_profile'), style: const TextStyle(color: Colors.grey, fontSize: 13)),
           if (!widget.profile.isUser) ...[
             const SizedBox(height: 15),
             Row(
@@ -111,7 +133,6 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
       ),
     );
   }
-
 
   Widget _buildStatBadge(String label, int count, Color color) {
     return Column(
@@ -138,12 +159,12 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("ТОП ГЕРОЕВ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+        Text(AppStrings.get(context, 'top_heroes'), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
         const SizedBox(height: 15),
         ...top3.map((s) => _buildHeroStatRow(s, isTop: true)).toList(),
         if (others.isNotEmpty)
           ExpansionTile(
-            title: Text("ОСТАЛЬНЫЕ ГЕРОИ (${others.length})", style: const TextStyle(fontSize: 13, color: Colors.white54)),
+            title: Text("${AppStrings.get(context, 'other_heroes')} (${others.length})", style: const TextStyle(fontSize: 13, color: Colors.white54)),
             tilePadding: EdgeInsets.zero,
             children: others.map((s) => _buildHeroStatRow(s)).toList(),
           ),
@@ -182,7 +203,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(DataUtils.getLocalizedHeroName(heroId, context), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text("Игр: $totalGames", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text("${AppStrings.get(context, 'games_count')} $totalGames", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -260,7 +281,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
         ),
         title: Row(
           children: [
-            Text(playerWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: playerWon ? Colors.green : Colors.red)),
+            Text(playerWon ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat'), 
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: playerWon ? Colors.green : Colors.red)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(DataUtils.getLocalizedHeroName(heroId, context), 
@@ -279,7 +301,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
               ),
             ),
             const Text(" • ", style: TextStyle(color: Colors.white24)),
-            Text("KDA: $kda", style: const TextStyle(fontSize: 11)),
+            Text("${AppStrings.get(context, 'kda')}: $kda", style: const TextStyle(fontSize: 11)),
             const Text(" • ", style: TextStyle(color: Colors.white24)),
             DataUtils.getMedalIcon(score.toInt(), size: 14),
           ],
@@ -288,7 +310,8 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(isEnemy ? "Враг" : "Союзник", style: TextStyle(fontSize: 10, color: isEnemy ? Colors.redAccent.withOpacity(0.7) : Colors.blueAccent.withOpacity(0.7))),
+            Text(isEnemy ? AppStrings.get(context, 'enemy') : AppStrings.get(context, 'ally'), 
+              style: TextStyle(fontSize: 10, color: isEnemy ? Colors.redAccent.withOpacity(0.7) : Colors.blueAccent.withOpacity(0.7))),
             Text(game.date.toString().substring(5, 10), style: const TextStyle(fontSize: 10, color: Colors.white24)),
           ],
         ),

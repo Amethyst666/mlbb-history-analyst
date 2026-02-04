@@ -5,7 +5,7 @@ class PlayerStats {
   final String kda;
   final String gold;
   final List<int> itemIds;
-  final int score; // Changed from String
+  final int score; 
   final bool isEnemy;
   final bool isUser;
   final String role;
@@ -14,20 +14,20 @@ class PlayerStats {
   final int? profileId;
   final String? playerId;
   final int teamId;
+  final int serverId; // Tag 17
   
-  // New fields
   final int level;
-  final int goldLane; // 87
-  final int goldKill; // 86
-  final int goldTower; // Not mapped in user description, but maybe 20 is damage tower? User said "gold from sources... 87 creeps". Let's stick to user desc: 82 jungle, 86 kills, 87 lane.
-  // Wait, user said "82 -- в лесу, 86 -- за убийства, 87 -- за крипов на линии". 
-  final int goldJungle; // 82
+  final int goldLane; 
+  final int goldKill; 
+  final int goldTower; 
+  final int goldJungle; 
   
-  // Damage Stats
-  final int damageHero; // 19
-  final int damageTower; // 20
-  final int damageTaken; // 21
-  final int heal; // 84 + 85
+  final int damageHero; 
+  final int damageTower; 
+  final int damageTaken; 
+  final int heal; 
+  final int ccDuration; 
+  final int killStreak; 
   
   final String clan;
   final int partyId;
@@ -48,6 +48,7 @@ class PlayerStats {
     this.profileId,
     this.playerId,
     this.teamId = 0,
+    this.serverId = 0,
     this.level = 0,
     this.goldLane = 0,
     this.goldKill = 0,
@@ -57,6 +58,8 @@ class PlayerStats {
     this.damageTower = 0,
     this.damageTaken = 0,
     this.heal = 0,
+    this.ccDuration = 0,
+    this.killStreak = 0,
     this.clan = '',
     this.partyId = 0,
   });
@@ -69,13 +72,14 @@ class PlayerStats {
       'kda': kda,
       'gold': gold,
       'items': itemIds.join(','),
-      'score': score, // Now int
+      'score': score, 
       'is_enemy': isEnemy ? 1 : 0,
       'is_user': isUser ? 1 : 0,
       'role': role,
       'spell': spellId.toString(),
       'game_id': gameId,
       'profile_id': profileId,
+      'server_id': serverId,
       'level': level,
       'gold_lane': goldLane,
       'gold_kill': goldKill,
@@ -84,6 +88,8 @@ class PlayerStats {
       'damage_tower': damageTower,
       'damage_taken': damageTaken,
       'heal': heal,
+      'cc_duration': ccDuration,
+      'kill_streak': killStreak,
       'clan': clan,
       'party_id': partyId,
     };
@@ -95,7 +101,6 @@ class PlayerStats {
       parsedItems = map['items'].toString().split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
     }
     
-    // Handle score as int or string
     int parsedScore = 0;
     if (map['score'] is int) {
       parsedScore = map['score'];
@@ -117,6 +122,7 @@ class PlayerStats {
       spellId: int.tryParse(map['spell'] ?? '0') ?? 0,
       gameId: map['game_id'],
       profileId: map['profile_id'],
+      serverId: map['server_id'] ?? 0,
       level: map['level'] ?? 0,
       goldLane: map['gold_lane'] ?? 0,
       goldKill: map['gold_kill'] ?? 0,
@@ -125,9 +131,11 @@ class PlayerStats {
       damageTower: map['damage_tower'] ?? 0,
       damageTaken: map['damage_taken'] ?? 0,
       heal: map['heal'] ?? 0,
+      ccDuration: map['cc_duration'] ?? 0,
+      killStreak: map['kill_streak'] ?? 0,
       clan: map['clan'] ?? '',
       partyId: map['party_id'] ?? 0,
-      playerId: map['playerId'], // Added
+      playerId: map['playerId'], 
     );
   }
 
@@ -138,7 +146,7 @@ class PlayerStats {
     String? kda,
     String? gold,
     List<int>? itemIds,
-    int? score, // Changed from String
+    int? score, 
     bool? isEnemy,
     bool? isUser,
     String? role,
@@ -147,6 +155,7 @@ class PlayerStats {
     int? profileId,
     String? playerId,
     int? teamId,
+    int? serverId,
     int? level,
     int? goldLane,
     int? goldKill,
@@ -155,6 +164,8 @@ class PlayerStats {
     int? damageTower,
     int? damageTaken,
     int? heal,
+    int? ccDuration,
+    int? killStreak,
     String? clan,
     int? partyId,
   }) {
@@ -174,6 +185,7 @@ class PlayerStats {
       profileId: profileId ?? this.profileId,
       playerId: playerId ?? this.playerId,
       teamId: teamId ?? this.teamId,
+      serverId: serverId ?? this.serverId,
       level: level ?? this.level,
       goldLane: goldLane ?? this.goldLane,
       goldKill: goldKill ?? this.goldKill,
@@ -182,6 +194,8 @@ class PlayerStats {
       damageTower: damageTower ?? this.damageTower,
       damageTaken: damageTaken ?? this.damageTaken,
       heal: heal ?? this.heal,
+      ccDuration: ccDuration ?? this.ccDuration,
+      killStreak: killStreak ?? this.killStreak,
       clan: clan ?? this.clan,
       partyId: partyId ?? this.partyId,
     );

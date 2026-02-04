@@ -355,16 +355,13 @@ class GameData {
     GameEntity(id: 7157, assetName: 'demon_shoes', en: 'Demon Shoes (Favor)', ru: 'Обувь Демона (Благосклонность)', category: 'movement', blessingId: 20006),
     GameEntity(id: 7158, assetName: 'demon_shoes', en: 'Demon Shoes (Dire Hit)', ru: 'Обувь Демона (Острый Удар)', category: 'movement', blessingId: 20007),
     // Rapid Boots (4008)
-    GameEntity(id: 6858, assetName: 'rapid_boots', en: 'Rapid Boots (Flame)', ru: 'Сапоги-Скороходы (Пламя)', category: 'movement', blessingId: 20001),
-    GameEntity(id: 6857, assetName: 'rapid_boots', en: 'Rapid Boots (Ice)', ru: 'Сапоги-Скороходы (Лед)', category: 'movement', blessingId: 20002),
-    GameEntity(id: 6859, assetName: 'rapid_boots', en: 'Rapid Boots (Bloody)', ru: 'Сапоги-Скороходы (Кровь)', category: 'movement', blessingId: 20003),
+    GameEntity(id: 7046, assetName: 'rapid_boots', en: 'Rapid Boots (Flame)', ru: 'Сапоги-Скороходы (Пламя)', category: 'movement', blessingId: 20001),
+    GameEntity(id: 7045, assetName: 'rapid_boots', en: 'Rapid Boots (Ice)', ru: 'Сапоги-Скороходы (Лед)', category: 'movement', blessingId: 20002),
+    GameEntity(id: 7047, assetName: 'rapid_boots', en: 'Rapid Boots (Bloody)', ru: 'Сапоги-Скороходы (Кровь)', category: 'movement', blessingId: 20003),
     GameEntity(id: 7145, assetName: 'rapid_boots', en: 'Rapid Boots (Conceal)', ru: 'Сапоги-Скороходы (Маскировка)', category: 'movement', blessingId: 20004),
     GameEntity(id: 7146, assetName: 'rapid_boots', en: 'Rapid Boots (Encourage)', ru: 'Сапоги-Скороходы (Поощрение)', category: 'movement', blessingId: 20005),
     GameEntity(id: 7147, assetName: 'rapid_boots', en: 'Rapid Boots (Favor)', ru: 'Сапоги-Скороходы (Благосклонность)', category: 'movement', blessingId: 20006),
     GameEntity(id: 7148, assetName: 'rapid_boots', en: 'Rapid Boots (Dire Hit)', ru: 'Сапоги-Скороходы (Острый Удар)', category: 'movement', blessingId: 20007),
-
-    // Note: Blessings (Roam/Jungle) combined with boots will have different IDs.
-    // The user will map these later. For now, we only list standard items.
 
     // === OTHER ===
     GameEntity(id: 20113, assetName: 'lantern_of_hope', en: 'Lantern of Hope', ru: 'Фонарь Надежды', category: 'other'),

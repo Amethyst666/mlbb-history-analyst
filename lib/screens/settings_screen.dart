@@ -50,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ID пользователя сохранен")),
+        SnackBar(content: Text(AppStrings.get(context, 'save_id_success'))),
       );
     }
   }
@@ -74,6 +74,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _toggleTheme(bool isDark) async {
+    final newMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    appThemeNotifier.value = newMode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', isDark ? 'dark' : 'light');
+  }
+
   Future<void> _changeLanguage() async {
     final currentLang = appLocaleNotifier.value.languageCode;
     final newLang = currentLang == 'en' ? 'ru' : 'en';
@@ -86,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final currentLangCode = Localizations.localeOf(context).languageCode;
     final langName = currentLangCode == 'en' ? 'English' : 'Русский';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(title: Text(AppStrings.get(context, 'settings'))),
@@ -98,11 +106,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 TextField(
                   controller: _nickController,
                   decoration: InputDecoration(
-                    labelText: "Мой Game ID (для авто-определения)", 
-                    hintText: "Например: 12345678",
+                    labelText: AppStrings.get(context, 'my_game_id_label'), 
+                    hintText: AppStrings.get(context, 'my_game_id_hint'),
                     prefixIcon: const Icon(Icons.perm_identity),
                     border: const OutlineInputBorder(),
-                    helperText: "Нужен для автоматического определения 'Меня' при импорте.",
+                    helperText: AppStrings.get(context, 'my_game_id_helper'),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.save),
                       onPressed: () => _saveNickname(_nickController.text),
@@ -116,8 +124,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   controller: _pathController,
                   readOnly: true,
                   decoration: InputDecoration(
-                    labelText: "Папка с историей игр",
-                    hintText: "Выберите папку...",
+                    labelText: AppStrings.get(context, 'history_path_label'),
+                    hintText: AppStrings.get(context, 'history_path_hint'),
                     prefixIcon: const Icon(Icons.folder),
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
@@ -139,16 +147,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _changeLanguage,
           ),
           ListTile(
-            leading: const Icon(Icons.dark_mode),
+            leading: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
             title: Text(AppStrings.get(context, 'theme')),
-            subtitle: const Text('Dark Mode'),
-            trailing: Switch(value: true, onChanged: (val) {}),
+            subtitle: Text(isDark ? AppStrings.get(context, 'dark_mode') : AppStrings.get(context, 'light_mode')),
+            trailing: Switch(
+              value: isDark, 
+              onChanged: _toggleTheme,
+              activeColor: Colors.deepPurpleAccent,
+            ),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.developer_mode),
             title: Text(AppStrings.get(context, 'developer_mode')),
-            subtitle: const Text('Enable advanced features'),
+            subtitle: Text(AppStrings.get(context, 'dev_mode_subtitle')),
             trailing: Switch(
               value: _isDeveloperMode,
               onChanged: _toggleDeveloperMode,
@@ -158,21 +170,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (_isDeveloperMode) ...[
             ListTile(
               leading: const Icon(Icons.collections),
-              title: const Text('Asset Gallery'),
-              subtitle: const Text('Check icons'),
+              title: Text(AppStrings.get(context, 'asset_gallery')),
+              subtitle: Text(AppStrings.get(context, 'check_icons')),
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const AssetGalleryScreen()));
               },
             ),
             ListTile(
               leading: const Icon(Icons.person_remove, color: Colors.orangeAccent),
-              title: const Text('Очистить базу игроков'),
-              subtitle: const Text('Удалить игроков, которых нет ни в одном матче'),
+              title: Text(AppStrings.get(context, 'cleanup_players')),
+              subtitle: Text(AppStrings.get(context, 'cleanup_players_desc')),
               onTap: () async {
                 final count = await _dbHelper.deleteUnusedProfiles();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Удалено профилей: $count")),
+                    SnackBar(content: Text("${AppStrings.get(context, 'deleted_profiles')}$count")),
                   );
                 }
               },
@@ -181,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info),
             title: Text(AppStrings.get(context, 'about')),
-            subtitle: const Text('Version 2.1.0 (Batch Import)'),
+            subtitle: Text("${AppStrings.get(context, 'version')} 2.1.0"),
             onTap: () {},
           ),
         ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_stats.dart';
 import '../models/player_stats.dart';
 import '../models/player_profile.dart';
@@ -24,7 +23,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'game_stats.db');
     return await openDatabase(
       path,
-      version: 18, 
+      version: 21, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -60,6 +59,9 @@ class DatabaseHelper {
         damage_tower INTEGER DEFAULT 0,
         damage_taken INTEGER DEFAULT 0,
         heal INTEGER DEFAULT 0,
+        cc_duration INTEGER DEFAULT 0,
+        kill_streak INTEGER DEFAULT 0,
+        server_id INTEGER DEFAULT 0,
         clan TEXT DEFAULT '',
         party_id INTEGER DEFAULT 0,
         FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
@@ -70,13 +72,24 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         main_nickname TEXT,
         is_user INTEGER DEFAULT 0,
-        game_account_id TEXT
+        game_account_id TEXT,
+        pinned_alias TEXT,
+        server_id INTEGER DEFAULT 0
       )
     ''');
     await db.execute('''
       CREATE TABLE player_nicknames(
         nickname TEXT PRIMARY KEY,
         profile_id INTEGER,
+        FOREIGN KEY(profile_id) REFERENCES player_profiles(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE player_comments(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id INTEGER,
+        comment TEXT,
+        timestamp TEXT,
         FOREIGN KEY(profile_id) REFERENCES player_profiles(id) ON DELETE CASCADE
       )
     ''');
@@ -106,7 +119,6 @@ class DatabaseHelper {
       await _safeAddColumn(db, 'games', 'match_id', 'TEXT');
     }
     if (oldVersion < 16) {
-      // Remove duplicates before creating unique index
       try {
         await db.execute('''
           DELETE FROM games 
@@ -128,6 +140,26 @@ class DatabaseHelper {
     if (oldVersion < 18) {
       await _safeAddColumn(db, 'games', 'end_date', 'TEXT');
     }
+    if (oldVersion < 19) {
+      await _safeAddColumn(db, 'player_profiles', 'pinned_alias', 'TEXT');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS player_comments(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          profile_id INTEGER,
+          comment TEXT,
+          timestamp TEXT,
+          FOREIGN KEY(profile_id) REFERENCES player_profiles(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    if (oldVersion < 20) {
+      await _safeAddColumn(db, 'game_players', 'cc_duration', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'kill_streak', 'INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 21) {
+      await _safeAddColumn(db, 'player_profiles', 'server_id', 'INTEGER DEFAULT 0');
+      await _safeAddColumn(db, 'game_players', 'server_id', 'INTEGER DEFAULT 0');
+    }
   }
 
   Future<void> _safeAddColumn(Database db, String table, String column, String type) async {
@@ -145,7 +177,7 @@ class DatabaseHelper {
     return res.isNotEmpty;
   }
 
-  Future<int> getOrCreateProfile(String nickname, {bool isUser = false, String? gameAccountId}) async {
+  Future<int> getOrCreateProfile(String nickname, {bool isUser = false, String? gameAccountId, int serverId = 0}) async {
     Database db = await database;
     final String cleanNick = nickname.trim();
     int? profileId;
@@ -160,7 +192,9 @@ class DatabaseHelper {
       if (byId.isNotEmpty) {
         profileId = byId.first['id'];
         if (byId.first['main_nickname'] != cleanNick) {
-          await db.update('player_profiles', {'main_nickname': cleanNick}, where: 'id = ?', whereArgs: [profileId]);
+          await db.update('player_profiles', {'main_nickname': cleanNick, 'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
+        } else {
+          await db.update('player_profiles', {'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
         }
       }
     }
@@ -174,6 +208,7 @@ class DatabaseHelper {
       );
       if (mapping.isNotEmpty) {
         profileId = mapping.first['profile_id'];
+        await db.update('player_profiles', {'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
         if (gameAccountId != null && gameAccountId.isNotEmpty && gameAccountId != '0') {
            await db.update('player_profiles', {'game_account_id': gameAccountId}, where: 'id = ?', whereArgs: [profileId]);
         }
@@ -192,13 +227,15 @@ class DatabaseHelper {
           if (customId != null) 'id': customId,
           'main_nickname': cleanNick, 
           'is_user': isUser ? 1 : 0,
-          'game_account_id': gameAccountId
+          'game_account_id': gameAccountId,
+          'server_id': serverId
         });
       } catch (e) {
         profileId = await db.insert('player_profiles', {
           'main_nickname': cleanNick, 
           'is_user': isUser ? 1 : 0,
-          'game_account_id': gameAccountId
+          'game_account_id': gameAccountId,
+          'server_id': serverId
         });
       }
       
@@ -218,12 +255,16 @@ class DatabaseHelper {
 
   Future<List<PlayerProfile>> getAllProfiles() async {
     Database db = await database;
+    // Join with game_players and games to get the latest match date
     final maps = await db.rawQuery('''
-      SELECT id, main_nickname, is_user 
-      FROM player_profiles 
-      WHERE (id IN (SELECT DISTINCT profile_id FROM player_nicknames) OR is_user = 1)
-      GROUP BY id
-      ORDER BY id DESC
+      SELECT p.id, p.main_nickname, p.is_user, p.pinned_alias, p.server_id,
+             MAX(COALESCE(g.end_date, g.date)) as last_match
+      FROM player_profiles p
+      LEFT JOIN game_players gp ON p.id = gp.profile_id
+      LEFT JOIN games g ON gp.game_id = g.id
+      WHERE (p.id IN (SELECT DISTINCT profile_id FROM player_nicknames) OR p.is_user = 1)
+      GROUP BY p.id
+      ORDER BY last_match DESC, p.id DESC
     ''');
     return maps.map((m) => PlayerProfile.fromMap(m)).toList();
   }
@@ -232,14 +273,17 @@ class DatabaseHelper {
     Database db = await database;
     final String q = '%${query.toLowerCase()}%';
     final maps = await db.rawQuery('''
-      SELECT p.id, p.main_nickname, p.is_user
+      SELECT p.id, p.main_nickname, p.is_user, p.pinned_alias, p.server_id,
+             MAX(COALESCE(g.end_date, g.date)) as last_match
       FROM player_profiles p
+      LEFT JOIN game_players gp ON p.id = gp.profile_id
+      LEFT JOIN games g ON gp.game_id = g.id
       WHERE p.id IN (
         SELECT profile_id FROM player_nicknames WHERE LOWER(nickname) LIKE ?
-      ) OR LOWER(p.main_nickname) LIKE ?
+      ) OR LOWER(p.main_nickname) LIKE ? OR LOWER(p.pinned_alias) LIKE ?
       GROUP BY p.id
-      ORDER BY p.id DESC
-    ''', [q, q]);
+      ORDER BY last_match DESC, p.id DESC
+    ''', [q, q, q]);
     return maps.map((m) => PlayerProfile.fromMap(m)).toList();
   }
 
@@ -247,6 +291,49 @@ class DatabaseHelper {
     Database db = await database;
     final maps = await db.query('player_nicknames', columns: ['nickname'], where: 'profile_id = ?', whereArgs: [profileId]);
     return maps.map((m) => m['nickname'] as String).toList();
+  }
+
+  Future<void> addAlias(int profileId, String alias) async {
+    Database db = await database;
+    await db.insert('player_nicknames', {'nickname': alias.trim(), 'profile_id': profileId}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    updateNotifier.notifyListeners();
+  }
+
+  Future<void> deleteAlias(int profileId, String alias) async {
+    Database db = await database;
+    await db.delete('player_nicknames', where: 'profile_id = ? AND nickname = ?', whereArgs: [profileId, alias.trim()]);
+    final List<Map<String, dynamic>> profile = await db.query('player_profiles', columns: ['pinned_alias'], where: 'id = ?', whereArgs: [profileId]);
+    if (profile.isNotEmpty && profile.first['pinned_alias'] == alias.trim()) {
+      await db.update('player_profiles', {'pinned_alias': null}, where: 'id = ?', whereArgs: [profileId]);
+    }
+    updateNotifier.notifyListeners();
+  }
+
+  Future<void> pinAlias(int profileId, String? alias) async {
+    Database db = await database;
+    await db.update('player_profiles', {'pinned_alias': alias?.trim()}, where: 'id = ?', whereArgs: [profileId]);
+    updateNotifier.notifyListeners();
+  }
+
+  Future<void> addComment(int profileId, String text) async {
+    Database db = await database;
+    await db.insert('player_comments', {
+      'profile_id': profileId,
+      'comment': text.trim(),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    updateNotifier.notifyListeners();
+  }
+
+  Future<void> deleteComment(int commentId) async {
+    Database db = await database;
+    await db.delete('player_comments', where: 'id = ?', whereArgs: [commentId]);
+    updateNotifier.notifyListeners();
+  }
+
+  Future<List<Map<String, dynamic>>> getComments(int profileId) async {
+    Database db = await database;
+    return await db.query('player_comments', where: 'profile_id = ?', orderBy: 'timestamp DESC', whereArgs: [profileId]);
   }
 
   Future<int> deleteUnusedProfiles() async {
@@ -300,22 +387,26 @@ class DatabaseHelper {
       SELECT gp.*, 
              pp.main_nickname as profile_main_name, 
              pp.is_user as profile_is_user,
-             pp.game_account_id as profile_game_acc_id
+             pp.game_account_id as profile_game_acc_id,
+             pp.pinned_alias as profile_pinned_alias,
+             pp.server_id as profile_server_id
       FROM game_players gp
       LEFT JOIN player_profiles pp ON gp.profile_id = pp.id
       WHERE gp.game_id = ?
     ''', [gameId]);
     return List.generate(maps.length, (i) {
       var map = Map<String, dynamic>.from(maps[i]);
-      if (map['profile_main_name'] != null) map['nickname'] = map['profile_main_name'];
+      String displayName = map['profile_pinned_alias'] ?? map['profile_main_name'] ?? map['nickname'];
+      map['nickname'] = displayName;
       bool isUser = (map['profile_is_user'] == 1) || (map['is_user'] == 1);
       map['is_user'] = isUser ? 1 : 0;
       map['playerId'] = map['profile_game_acc_id'];
+      map['server_id'] = map['profile_server_id'] ?? map['server_id'] ?? 0;
       return PlayerStats.fromMap(map);
     });
   }
 
-  Future<int> _getOrCreateProfileTxn(Transaction txn, String nickname, {bool? forceIsUser, String? gameAccountId}) async {
+  Future<int> _getOrCreateProfileTxn(Transaction txn, String nickname, {bool? forceIsUser, String? gameAccountId, int serverId = 0}) async {
     final String cleanNick = nickname.trim();
     int? profileId;
 
@@ -329,7 +420,9 @@ class DatabaseHelper {
       if (byId.isNotEmpty) {
         profileId = byId.first['id'];
         if (byId.first['main_nickname'] != cleanNick) {
-          await txn.update('player_profiles', {'main_nickname': cleanNick}, where: 'id = ?', whereArgs: [profileId]);
+          await txn.update('player_profiles', {'main_nickname': cleanNick, 'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
+        } else {
+          await txn.update('player_profiles', {'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
         }
       }
     }
@@ -338,6 +431,7 @@ class DatabaseHelper {
       final List<Map<String, dynamic>> mapping = await txn.query('player_nicknames', columns: ['profile_id'], where: 'LOWER(nickname) = ?', whereArgs: [cleanNick.toLowerCase()]);
       if (mapping.isNotEmpty) {
         profileId = mapping.first['profile_id'];
+        await txn.update('player_profiles', {'server_id': serverId}, where: 'id = ?', whereArgs: [profileId]);
         if (gameAccountId != null && gameAccountId.isNotEmpty && gameAccountId != '0') {
            await txn.update('player_profiles', {'game_account_id': gameAccountId}, where: 'id = ?', whereArgs: [profileId]);
         }
@@ -356,13 +450,15 @@ class DatabaseHelper {
           if (customId != null) 'id': customId,
           'main_nickname': cleanNick, 
           'is_user': forceIsUser == true ? 1 : 0,
-          'game_account_id': gameAccountId
+          'game_account_id': gameAccountId,
+          'server_id': serverId
         });
       } catch (e) {
         profileId = await txn.insert('player_profiles', {
           'main_nickname': cleanNick, 
           'is_user': forceIsUser == true ? 1 : 0,
-          'game_account_id': gameAccountId
+          'game_account_id': gameAccountId,
+          'server_id': serverId
         });
       }
       
@@ -383,7 +479,7 @@ class DatabaseHelper {
     try {
       int id = await db.transaction((txn) async {
         for (int i = 0; i < players.length; i++) {
-          int pid = await _getOrCreateProfileTxn(txn, players[i].nickname, forceIsUser: players[i].isUser, gameAccountId: players[i].playerId);
+          int pid = await _getOrCreateProfileTxn(txn, players[i].nickname, forceIsUser: players[i].isUser, gameAccountId: players[i].playerId, serverId: players[i].serverId);
           players[i] = players[i].copyWith(profileId: pid);
         }
         int gameId = await txn.insert('games', game.toMap());
@@ -393,6 +489,7 @@ class DatabaseHelper {
         }
         return gameId;
       });
+      updateNotifier.notifyListeners(); // Notify UI to refresh player list
       return id;
     } catch (e) {
       debugPrint("Error inserting game: $e");
@@ -402,7 +499,6 @@ class DatabaseHelper {
 
   Future<List<GameStats>> getGames() async {
     Database db = await database;
-    // Order by end_date if available, then date
     List<Map<String, dynamic>> maps = await db.query('games', orderBy: 'COALESCE(end_date, date) DESC');
     return maps.map((m) => GameStats.fromMap(m)).toList();
   }

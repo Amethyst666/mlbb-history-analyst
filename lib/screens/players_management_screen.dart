@@ -73,7 +73,7 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: "Поиск по нику...",
+                hintText: AppStrings.get(context, 'search_nick_hint'),
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 filled: true,
@@ -91,7 +91,7 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
   }
 
   Widget _buildPlayerList(List<PlayerProfile> list) {
-    if (list.isEmpty) return const Center(child: Text("Пусто", style: TextStyle(color: Colors.grey)));
+    if (list.isEmpty) return Center(child: Text(AppStrings.get(context, 'empty'), style: const TextStyle(color: Colors.grey)));
     return ListView.builder(
       itemCount: list.length,
       itemBuilder: (context, index) {
@@ -102,15 +102,17 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
             child: Icon(p.isUser ? Icons.person : Icons.people, color: Colors.black),
           ),
           title: Text(
-            p.mainNickname,
+            p.pinnedAlias ?? p.mainNickname,
             style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal),
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (p.pinnedAlias != null)
+                Text(p.mainNickname, style: const TextStyle(fontSize: 12, color: Colors.white54)),
               Text("ID: ${p.id}", style: const TextStyle(fontSize: 10, color: Colors.white24)),
-              if (p.isUser) const Text("Это вы", style: TextStyle(color: Colors.cyanAccent, fontSize: 12)),
+              if (p.isUser) Text(AppStrings.get(context, 'you_label'), style: const TextStyle(color: Colors.cyanAccent, fontSize: 12)),
             ],
           ),
           onTap: () {
