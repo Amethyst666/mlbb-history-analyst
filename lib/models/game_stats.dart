@@ -5,6 +5,7 @@ class GameStats {
   final int heroId; // Changed from String hero
   final String kda;
   final List<int> itemIds; // Changed from String items
+  final int score; // Added user's score (medal ID)
   final String players;
   final DateTime date;
   final String duration;
@@ -18,6 +19,7 @@ class GameStats {
     required this.heroId,
     required this.kda,
     required this.itemIds,
+    this.score = 0,
     required this.players,
     required this.date,
     this.duration = '00:00',
@@ -33,6 +35,7 @@ class GameStats {
       'hero': heroId.toString(),
       'kda': kda,
       'items': itemIds.join(','),
+      'score': score,
       'players': players,
       'date': date.toIso8601String(),
       'duration': duration,
@@ -54,7 +57,8 @@ class GameStats {
       heroId: int.tryParse(map['hero'] ?? '0') ?? 0,
       kda: map['kda'],
       itemIds: parsedItems,
-      players: map['players'],
+      score: map['score'] ?? 0,
+      players: map['players'] ?? '',
       date: DateTime.parse(map['date']),
       duration: map['duration'] ?? '00:00',
       role: map['role'] ?? 'unknown',

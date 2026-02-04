@@ -24,7 +24,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'game_stats.db');
     return await openDatabase(
       path,
-      version: 15, 
+      version: 17, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -39,9 +39,14 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         result TEXT, hero TEXT, kda TEXT, items TEXT, players TEXT,
         date TEXT, duration TEXT, role TEXT, spell TEXT,
-        match_id TEXT
+        match_id TEXT, score INTEGER DEFAULT 0
       )
     ''');
+// ... rest of onCreate same ...
+
+    // Add unique index for match_id to prevent duplicates
+    await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games(match_id) WHERE match_id IS NOT NULL AND match_id != ''");
+
     await db.execute('''
       CREATE TABLE game_players(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +107,22 @@ class DatabaseHelper {
     if (oldVersion < 15) {
       await db.execute('ALTER TABLE games ADD COLUMN match_id TEXT');
     }
+    if (oldVersion < 16) {
+      // Remove duplicates before creating unique index
+      await db.execute('''
+        DELETE FROM games 
+        WHERE match_id != '' AND match_id IS NOT NULL 
+        AND id NOT IN (
+          SELECT MIN(id) FROM games 
+          WHERE match_id != '' AND match_id IS NOT NULL 
+          GROUP BY match_id
+        )
+      ''');
+      await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games(match_id) WHERE match_id IS NOT NULL AND match_id != ''");
+    }
+    if (oldVersion < 17) {
+      await db.execute('ALTER TABLE games ADD COLUMN score INTEGER DEFAULT 0');
+    }
   }
 
   Future<bool> isGameExists(String matchId) async {
@@ -116,7 +137,6 @@ class DatabaseHelper {
     final String cleanNick = nickname.trim();
     int? profileId;
 
-    // 1. Try finding by Game Account ID
     if (gameAccountId != null && gameAccountId.isNotEmpty && gameAccountId != '0') {
       final List<Map<String, dynamic>> byId = await db.query(
         'player_profiles', 
@@ -132,7 +152,6 @@ class DatabaseHelper {
       }
     }
 
-    // 2. Fallback to Nickname search
     if (profileId == null) {
       final List<Map<String, dynamic>> mapping = await db.query(
         'player_nicknames', 
@@ -148,7 +167,6 @@ class DatabaseHelper {
       }
     }
 
-    // 3. Create new profile
     if (profileId == null) {
       int? customId;
       if (gameAccountId != null) {
@@ -349,19 +367,24 @@ class DatabaseHelper {
     }
 
     Database db = await database;
-    int id = await db.transaction((txn) async {
-      for (int i = 0; i < players.length; i++) {
-        int pid = await _getOrCreateProfileTxn(txn, players[i].nickname, forceIsUser: players[i].isUser, gameAccountId: players[i].playerId);
-        players[i] = players[i].copyWith(profileId: pid);
-      }
-      int gameId = await txn.insert('games', game.toMap());
-      for (var p in players) {
-        var map = p.toMap(); map['game_id'] = gameId;
-        await txn.insert('game_players', map);
-      }
-      return gameId;
-    });
-    return id;
+    try {
+      int id = await db.transaction((txn) async {
+        for (int i = 0; i < players.length; i++) {
+          int pid = await _getOrCreateProfileTxn(txn, players[i].nickname, forceIsUser: players[i].isUser, gameAccountId: players[i].playerId);
+          players[i] = players[i].copyWith(profileId: pid);
+        }
+        int gameId = await txn.insert('games', game.toMap());
+        for (var p in players) {
+          var map = p.toMap(); map['game_id'] = gameId;
+          await txn.insert('game_players', map);
+        }
+        return gameId;
+      });
+      return id;
+    } catch (e) {
+      debugPrint("Error inserting game: $e");
+      return -1;
+    }
   }
 
   Future<void> updateGameWithPlayers(GameStats game, List<PlayerStats> players) async {

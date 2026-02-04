@@ -52,7 +52,7 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
         kda: widget.game.kda,
         gold: '0',
         itemIds: widget.game.itemIds,
-        score: '',
+        score: 0,
         isEnemy: false,
         isUser: true,
       );
@@ -362,13 +362,18 @@ class _GameDetailsScreenState extends State<GameDetailsScreen> {
                       Row(
                         children: [
                           const SizedBox(width: 38), 
-                          if (player.spellId != 0) ...[
-                            DataUtils.getSpellIcon(player.spellId, size: 20),
-                            const SizedBox(width: 8),
-                            Container(width: 1, height: 15, color: Colors.white24),
-                            const SizedBox(width: 8),
-                          ],
-                          ...player.itemIds.map((itemId) => Padding(
+                                          if (player.spellId != 0) ...[
+                                            Column(
+                                              children: [
+                                                DataUtils.getSpellIcon(DataUtils.getDisplaySpellId(player.spellId, player.itemIds), size: 20),
+                                                if (_isDeveloperMode)
+                                                  Text("${player.spellId}", style: const TextStyle(fontSize: 6, color: Colors.white30)),
+                                              ],
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(width: 1, height: 15, color: Colors.white24),
+                                            const SizedBox(width: 8),
+                                          ],                          ...player.itemIds.map((itemId) => Padding(
                             padding: const EdgeInsets.only(right: 4.0),
                             child: Column(
                               children: [

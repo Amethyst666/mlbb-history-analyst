@@ -5,7 +5,7 @@ class PlayerStats {
   final String kda;
   final String gold;
   final List<int> itemIds;
-  final String score;
+  final int score; // Changed from String
   final bool isEnemy;
   final bool isUser;
   final String role;
@@ -69,7 +69,7 @@ class PlayerStats {
       'kda': kda,
       'gold': gold,
       'items': itemIds.join(','),
-      'score': score,
+      'score': score, // Now int
       'is_enemy': isEnemy ? 1 : 0,
       'is_user': isUser ? 1 : 0,
       'role': role,
@@ -95,6 +95,14 @@ class PlayerStats {
       parsedItems = map['items'].toString().split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
     }
     
+    // Handle score as int or string
+    int parsedScore = 0;
+    if (map['score'] is int) {
+      parsedScore = map['score'];
+    } else if (map['score'] != null) {
+      parsedScore = double.tryParse(map['score'].toString())?.toInt() ?? 0;
+    }
+
     return PlayerStats(
       id: map['id'],
       nickname: map['nickname'] ?? '',
@@ -102,7 +110,7 @@ class PlayerStats {
       kda: map['kda'] ?? '0/0/0',
       gold: map['gold'] ?? '0',
       itemIds: parsedItems,
-      score: map['score'] ?? '0.0',
+      score: parsedScore,
       isEnemy: map['is_enemy'] == 1,
       isUser: map['is_user'] == 1,
       role: map['role'] ?? 'unknown',
@@ -130,7 +138,7 @@ class PlayerStats {
     String? kda,
     String? gold,
     List<int>? itemIds,
-    String? score,
+    int? score, // Changed from String
     bool? isEnemy,
     bool? isUser,
     String? role,

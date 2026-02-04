@@ -128,7 +128,7 @@ class _HistoryFolderScreenState extends State<HistoryFolderScreen> {
       if (filename.startsWith('His-')) {
          var parts = filename.split('-');
          if (parts.length >= 3) {
-           extractedMatchId = parts.last;
+           extractedMatchId = parts.last.split('.').first;
          }
       }
 

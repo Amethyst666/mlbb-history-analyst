@@ -68,38 +68,21 @@ class HistoryParser {
           for (int k = 0; k < itemCount; k++) {
             if (cursor + 1 >= data.length) break;
             
-            // Read Item
-            int itemVal = data[cursor] | (data[cursor+1] << 8); // Little Endian
+            // Read Item (2 bytes, little endian)
+            int itemVal = data[cursor] | (data[cursor+1] << 8);
             if (itemVal > 0) itemIds.add(itemVal);
             cursor += 2; 
-            
-            // Exit if we reached the count limit
-            if (k == itemCount - 1) break;
-            
-            if (cursor >= data.length) break;
-            int nextByte = data[cursor];
 
-            if (nextByte == 0x01) {
-               // Found 01 marker immediately - End of items
-               debugPrint("Hit 0x01 marker at index $k. End of items.");
-               break;
-            } else if (nextByte == 0x00) {
-               // Check for double zero (padding)
-               if (cursor + 1 < data.length && data[cursor + 1] == 0x00) {
-                   debugPrint("Hit 0x00 0x00 padding at index $k. Skipping zeros...");
-                   // Consume all zeros
-                   while (cursor < data.length && data[cursor] == 0x00) {
-                     cursor++;
-                   }
-                   // Loop ends, we expect to be at 01 now
-                   break;
-               } else {
-                   // Standard single separator
-                   cursor++; 
-               }
-            } else {
-               // Unexpected byte, safer to stop
-               debugPrint("Unexpected byte $nextByte at separator position. Stopping items.");
+            // Skip ALL following zeros
+            while (cursor < data.length && data[cursor] == 0x00) {
+              cursor++;
+            }
+            
+            // Stop conditions:
+            // 1. Reached itemCount (handled by loop)
+            // 2. Next byte is 0x01
+            if (cursor < data.length && data[cursor] == 0x01) {
+               debugPrint("Hit 0x01 marker after item $k and skipping zeros. Ending items.");
                break;
             }
           }
@@ -232,7 +215,8 @@ class HistoryParser {
         int damageTaken = fields[21] ?? 0;
         int heal = (fields[84] ?? 0) + (fields[85] ?? 0);
 
-        String score = "${fields[18] ?? 0.0}"; 
+        // Score field 18 is Medal. 1=MVP, 2=Gold, 3=Silver, 4=Bronze
+        int score = fields[18] ?? 0; 
         
         // Extra info
         String clanIdStr = (fields[30] ?? 0).toString();
@@ -270,11 +254,15 @@ class HistoryParser {
 
         int fieldSpellId = fields[15] ?? 0;
         
-        // Check for Spells in item list (Blessings override generic spells)
+        // Check for Spells/Blessings in item list
         int finalSpellId = fieldSpellId;
         List<int> cleanItems = [];
+        
         for (var it in itemIds) {
-           if (GameData.getSpell(it) != null) {
+           final spellEntity = GameData.getSpell(it);
+           
+           if (spellEntity != null) {
+             // If we find a raw blessing ID in items, it's the spell
              finalSpellId = it;
            } else {
              cleanItems.add(it);
@@ -311,6 +299,31 @@ class HistoryParser {
         cursor = endBlock + 2; 
       }
 
+      // Search for Match ID in the footer (after last player)
+      String? foundMatchId;
+      int footerCursor = cursor;
+      
+      // Heuristic: Scan for a string of digits (length > 10)
+      // Usually strings are prefixed by length byte, or just raw bytes in some formats.
+      // Assuming VarInt string format: [Tag] [Len] [String] or just [Len] [String]
+      
+      while (footerCursor < data.length - 10) {
+         // Check for Length Byte + String
+         int len = data[footerCursor];
+         if (len > 10 && len < 30 && (footerCursor + 1 + len) <= data.length) {
+            try {
+               String s = utf8.decode(data.sublist(footerCursor + 1, footerCursor + 1 + len));
+               // Check if it's numeric and looks like a Match ID
+               if (RegExp(r'^\d{10,}').hasMatch(s)) {
+                  foundMatchId = s;
+                  debugPrint("Found Match ID in file: $s at offset $footerCursor");
+                  break;
+               }
+            } catch (_) {}
+         }
+         footerCursor++;
+      }
+
       // Final pass to set relative stats
       String gameResult = 'DEFEAT';
       if (myTeamId != 0 && winnerTeamId != 0) {
@@ -331,11 +344,12 @@ class HistoryParser {
 
       return ParsedGameData(
         game: GameStats(
-          matchId: matchId ?? "",
+          matchId: foundMatchId ?? matchId ?? "", // Prefer found ID, then argument
           result: gameResult,
           heroId: mainPlayer.heroId, 
           kda: mainPlayer.kda,
           itemIds: mainPlayer.itemIds,
+          score: mainPlayer.score, // Populate score from main player (user)
           players: playersList.map((p) => p.nickname).join(', '),
           date: date,
           duration: "00:00", 

@@ -31,8 +31,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
   String duration = '00:00';
   DateTime matchDate = DateTime.now();
 
-  List<PlayerStats> myTeam = List.generate(5, (i) => PlayerStats(nickname: 'Player ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
-  List<PlayerStats> enemyTeam = List.generate(5, (i) => PlayerStats(nickname: 'Enemy ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
+  List<PlayerStats> myTeam = List.generate(5, (i) => PlayerStats(nickname: 'Player ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
+  List<PlayerStats> enemyTeam = List.generate(5, (i) => PlayerStats(nickname: 'Enemy ${i + 1}', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
 
   @override
   void initState() {
@@ -56,8 +56,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
       _matchId = game.matchId;
       myTeam = players.where((p) => !p.isEnemy).toList();
       enemyTeam = players.where((p) => p.isEnemy).toList();
-      while (myTeam.length < 5) myTeam.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
-      while (enemyTeam.length < 5) enemyTeam.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
+      while (myTeam.length < 5) myTeam.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false, role: 'unknown', spellId: 0));
+      while (enemyTeam.length < 5) enemyTeam.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false, role: 'unknown', spellId: 0));
     });
   }
 
@@ -80,7 +80,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
         _file = File(path);
         if (filename.startsWith('His-')) {
           var parts = filename.split('-');
-          if (parts.length >= 3) _matchId = parts.last;
+          if (parts.length >= 3) _matchId = parts.last.split('.').first;
         }
       });
 
@@ -122,8 +122,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
               if (isAlly) allies.add(updated); else enemies.add(updated);
             }
 
-            while (allies.length < 5) allies.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: false, isUser: false));
-            while (enemies.length < 5) enemies.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: '0.0', isEnemy: true, isUser: false));
+            while (allies.length < 5) allies.add(PlayerStats(nickname: 'Player', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: false, isUser: false));
+            while (enemies.length < 5) enemies.add(PlayerStats(nickname: 'Enemy', heroId: 0, kda: '0/0/0', gold: '0', itemIds: [], score: 0, isEnemy: true, isUser: false));
 
             myTeam = allies;
             enemyTeam = enemies;
@@ -153,6 +153,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
       heroId: userStats?.heroId ?? 0, 
       kda: userStats?.kda ?? '', 
       itemIds: userStats?.itemIds ?? [], 
+      score: userStats?.score ?? 0, // Save user's score/medal
       players: '', 
       date: matchDate, 
       duration: duration, 
@@ -229,7 +230,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
         Text("💰 ${p.gold}", style: const TextStyle(color: Colors.grey)),
         if (p.itemIds.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Wrap(spacing: 4, children: p.itemIds.map((item) => SizedBox(width: 24, height: 24, child: DataUtils.getItemIcon(item, size: 24))).toList())),
       ]),
-      trailing: DataUtils.getSpellIcon(p.spellId, size: 24),
+      trailing: DataUtils.getSpellIcon(DataUtils.getDisplaySpellId(p.spellId, p.itemIds), size: 24),
       onTap: () => _editPlayerStats(i, isEnemy),
     );
   }

@@ -210,7 +210,7 @@ class DataUtils {
                  height: size * 0.5,
                  decoration: BoxDecoration(
                    shape: BoxShape.circle,
-                   border: Border.all(color: Colors.white, width: 1),
+                   border: Border.all(color: Colors.white, width: 0.2),
                    color: Colors.black54,
                  ),
                  child: ClipOval(
@@ -230,10 +230,10 @@ class DataUtils {
     return ClipRRect(borderRadius: BorderRadius.circular(4), child: baseIcon);
   }
 
-  static Widget getMedalIcon(String score, {double size = 20}) {
-    double val = double.tryParse(score) ?? 0.0;
-    int medalId = val.toInt();
+  static Widget getMedalIcon(int score, {double size = 20}) {
+    if (score == 0) return const SizedBox.shrink();
     
+    int medalId = score;
     String assetName = '';
     if (medalId == 1) assetName = 'mvp';
     else if (medalId == 2) assetName = 'gold_medal';
@@ -246,13 +246,28 @@ class DataUtils {
         width: size,
         height: size,
         fit: BoxFit.contain,
-        errorBuilder: (c,e,s) => Text(
-          score, 
-          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: size * 0.6)
+        errorBuilder: (c, e, s) => Text(
+          "$score", 
+          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: size * 0.8)
         ),
       );
     }
     
-    return Text(score, style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: size * 0.6));
+    return const SizedBox.shrink();
+  }
+
+  static int getDisplaySpellId(int spellId, List<int> itemIds) {
+    if (spellId != 20020) return spellId; // Only upgrade Retribution (20020)
+
+    for (var itemId in itemIds) {
+      final item = GameData.getItem(itemId);
+      if (item?.blessingId != null) {
+        // If it's a jungle blessing (20001-20003), upgrade the spell icon
+        if (item!.blessingId! >= 20001 && item.blessingId! <= 20003) {
+          return item.blessingId!;
+        }
+      }
+    }
+    return spellId;
   }
 }

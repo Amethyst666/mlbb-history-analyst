@@ -161,7 +161,12 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!noUser) ...[
-                    Text('${AppStrings.get(context, 'kda')}: ${game.kda}'),
+                    Row(
+                      children: [
+                        Text('${AppStrings.get(context, 'kda')}: ${game.kda} • '),
+                        DataUtils.getMedalIcon(game.score, size: 14),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 4,
