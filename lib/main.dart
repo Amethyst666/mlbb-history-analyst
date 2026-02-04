@@ -7,25 +7,18 @@ import 'screens/search_screen.dart';
 import 'screens/players_management_screen.dart';
 import 'screens/settings_screen.dart';
 import 'utils/app_strings.dart';
-import 'utils/database_helper.dart';
 
-// Global Notifiers
-final ValueNotifier<Locale> appLocaleNotifier = ValueNotifier(const Locale('en'));
-final ValueNotifier<ThemeMode> appThemeNotifier = ValueNotifier(ThemeMode.dark);
+final appLocaleNotifier = ValueNotifier(const Locale('en'));
+final appThemeNotifier = ValueNotifier(ThemeMode.dark);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
   final prefs = await SharedPreferences.getInstance();
   
-  // Load Language
-  final String? savedLang = prefs.getString('language_code');
-  if (savedLang != null) {
-    appLocaleNotifier.value = Locale(savedLang);
-  }
+  final savedLang = prefs.getString('language_code');
+  if (savedLang != null) appLocaleNotifier.value = Locale(savedLang);
 
-  // Load Theme
-  final String? savedTheme = prefs.getString('theme_mode');
+  final savedTheme = prefs.getString('theme_mode');
   if (savedTheme == 'light') {
     appThemeNotifier.value = ThemeMode.light;
   } else if (savedTheme == 'dark') {
@@ -69,10 +62,7 @@ class MyApp extends StatelessWidget {
               ),
               themeMode: themeMode,
               locale: locale,
-              supportedLocales: const [
-                Locale('en'),
-                Locale('ru'),
-              ],
+              supportedLocales: const [Locale('en'), Locale('ru')],
               localizationsDelegates: const [
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
@@ -105,43 +95,19 @@ class _MainScreenState extends State<MainScreen> {
     const SettingsScreen(),
   ];
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: _onItemTapped,
-        destinations: <NavigationDestination>[
-          NavigationDestination(
-            icon: const Icon(Icons.history),
-            label: AppStrings.get(context, 'recent'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.analytics),
-            label: AppStrings.get(context, 'stats'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.search),
-            label: AppStrings.get(context, 'search'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.people),
-            label: AppStrings.get(context, 'manage_players'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings),
-            label: AppStrings.get(context, 'settings'),
-          ),
+        onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.history), label: AppStrings.get(context, 'recent')),
+          NavigationDestination(icon: const Icon(Icons.analytics), label: AppStrings.get(context, 'stats')),
+          NavigationDestination(icon: const Icon(Icons.search), label: AppStrings.get(context, 'search')),
+          NavigationDestination(icon: const Icon(Icons.people), label: AppStrings.get(context, 'manage_players')),
+          NavigationDestination(icon: const Icon(Icons.settings), label: AppStrings.get(context, 'settings')),
         ],
       ),
     );

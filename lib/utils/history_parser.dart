@@ -152,9 +152,6 @@ class HistoryParser {
         }
 
         int gold = totalGoldFromTag8;
-        int damageHero = fields[19] ?? 0;
-        int damageTower = fields[20] ?? 0;
-        int damageTaken = fields[21] ?? 0;
         int heal = (fields[84] ?? 0) + (fields[85] ?? 0);
         int ccDuration = fields[83] ?? 0;
         int killStreak = fields[38] ?? 0;
@@ -182,12 +179,10 @@ class HistoryParser {
           myTeamId = teamId;
         }
 
-        int fieldSpellId = fields[15] ?? 0;
-        int finalSpellId = fieldSpellId;
+        int finalSpellId = fields[15] ?? 0;
         List<int> cleanItems = [];
         for (var it in itemIds) {
-           final spellEntity = GameData.getSpell(it);
-           if (spellEntity != null) finalSpellId = it; else cleanItems.add(it);
+           if (GameData.getSpell(it) != null) finalSpellId = it; else cleanItems.add(it);
         }
 
         tempPlayers.add({
@@ -196,7 +191,7 @@ class HistoryParser {
             itemIds: cleanItems, score: score, isEnemy: false, isUser: isMe, role: role,
             spellId: finalSpellId, playerId: playerIdStr, teamId: teamId, serverId: serverId,
             level: level, goldLane: fields[87] ?? 0, goldKill: fields[86] ?? 0, goldJungle: fields[82] ?? 0,
-            damageHero: damageHero, damageTower: damageTower, damageTaken: damageTaken, heal: heal,
+            damageHero: fields[19] ?? 0, damageTower: fields[20] ?? 0, damageTaken: fields[21] ?? 0, heal: heal,
             ccDuration: ccDuration, killStreak: killStreak, clan: finalClanStr, partyId: lobbyId,
           )
         });
@@ -269,13 +264,13 @@ class HistoryParser {
         game: GameStats(
           matchId: foundMatchId ?? matchId ?? "", result: gameResult, heroId: mainPlayer.heroId, 
           kda: mainPlayer.kda, itemIds: mainPlayer.itemIds, score: mainPlayer.score,
+          role: mainPlayer.role, spellId: mainPlayer.spellId,
           players: playersList.map((p) => p.nickname).join(', '),
           date: startTime, endDate: endTime, duration: formattedDuration, 
         ),
         players: playersList,
       );
-    } catch (e) {
-      debugPrint("Error parsing history file: $e");
+    } catch (_) {
       return null;
     }
   }

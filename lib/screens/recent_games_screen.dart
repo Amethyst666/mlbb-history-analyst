@@ -139,15 +139,15 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                     children: [
                       DataUtils.getHeroIcon(game.heroId, radius: 25),
                       Positioned(
-                        bottom: 0,
-                        right: 0,
+                        bottom: -2,
+                        right: -2,
                         child: Container(
                           padding: const EdgeInsets.all(1),
                           decoration: const BoxDecoration(
                             color: Colors.black87,
                             shape: BoxShape.circle,
                           ),
-                          child: DataUtils.getRoleIcon(game.role, size: 14),
+                          child: DataUtils.getRoleIcon(game.role, size: 12),
                         ),
                       ),
                     ],
@@ -161,9 +161,10 @@ class _RecentGamesScreenState extends State<RecentGamesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!noUser) ...[
-                    Row(
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text('${AppStrings.get(context, 'kda')}: ${game.kda} • '),
+                        Text('${AppStrings.get(context, 'kda')}: ${game.kda} • ', style: const TextStyle(fontSize: 11)),
                         DataUtils.getMedalIcon(game.score, size: 14),
                       ],
                     ),

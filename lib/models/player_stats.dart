@@ -14,7 +14,7 @@ class PlayerStats {
   final int? profileId;
   final String? playerId;
   final int teamId;
-  final int serverId; // Tag 17
+  final int serverId;
   
   final int level;
   final int goldLane; 

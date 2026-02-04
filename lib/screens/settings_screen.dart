@@ -74,11 +74,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _toggleTheme(bool isDark) async {
-    final newMode = isDark ? ThemeMode.dark : ThemeMode.light;
-    appThemeNotifier.value = newMode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme_mode', isDark ? 'dark' : 'light');
+  void _showThemeUnavailableMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppStrings.get(context, 'theme_unavailable'))),
+    );
   }
 
   Future<void> _changeLanguage() async {
@@ -150,9 +149,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
             title: Text(AppStrings.get(context, 'theme')),
             subtitle: Text(isDark ? AppStrings.get(context, 'dark_mode') : AppStrings.get(context, 'light_mode')),
+            onTap: _showThemeUnavailableMessage,
             trailing: Switch(
               value: isDark, 
-              onChanged: _toggleTheme,
+              onChanged: (_) => _showThemeUnavailableMessage(),
               activeColor: Colors.deepPurpleAccent,
             ),
           ),

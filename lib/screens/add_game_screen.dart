@@ -89,13 +89,17 @@ class _AddGameScreenState extends State<AddGameScreen> {
   Future<void> _saveGame() async {
     if (players.isEmpty) return;
 
+    final userStats = players.firstWhere((p) => p.isUser, orElse: () => players.first);
+
     final game = GameStats(
       matchId: _matchId ?? "",
       result: gameResult,
-      heroId: players.firstWhere((p) => p.isUser, orElse: () => players.first).heroId,
-      kda: players.firstWhere((p) => p.isUser, orElse: () => players.first).kda,
-      itemIds: players.firstWhere((p) => p.isUser, orElse: () => players.first).itemIds,
-      score: players.firstWhere((p) => p.isUser, orElse: () => players.first).score,
+      heroId: userStats.heroId,
+      kda: userStats.kda,
+      itemIds: userStats.itemIds,
+      score: userStats.score,
+      role: userStats.role,
+      spellId: userStats.spellId,
       players: players.map((p) => p.nickname).join(', '),
       date: matchDate,
       duration: duration,
@@ -145,7 +149,8 @@ class _AddGameScreenState extends State<AddGameScreen> {
                     ...players.map((p) => ListTile(
                       leading: DataUtils.getHeroIcon(p.heroId, radius: 20),
                       title: Text(p.nickname, style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal, color: p.isUser ? Colors.cyanAccent : Colors.white)),
-                      subtitle: Row(
+                      subtitle: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text("${AppStrings.get(context, 'kda')}: ${p.kda} • "),
                           DataUtils.getMedalIcon(p.score, size: 14),
