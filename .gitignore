@@ -1,45 +1,92 @@
+.gemini/
+.gitignore
+# ##############################################################################
+# Flutter/Dart
+# ##############################################################################
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Symbolication related
+app.*.symbols
+app.*.map.json
+
+# ##############################################################################
+# Android
+# ##############################################################################
+android/**/generated/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/key.properties
+android/*.jks
+android/*.keystore
+android/*.p12
+android/*.pfx
+android/*.realm
+
+# ##############################################################################
+# iOS/macOS
+# ##############################################################################
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/App.framework
+ios/Flutter/App.podspec
+ios/Pods/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.DS_Store
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+xcuserdata/
+
+# ##############################################################################
+# Web
+# ##############################################################################
+lib/generated_plugin_registrant.dart
+
+# ##############################################################################
+# IDEs & Tools
+# ##############################################################################
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.history
+.factorypath
+.project
+.settings/
+.classpath
+
+# ##############################################################################
 # Miscellaneous
+# ##############################################################################
 *.class
 *.log
 *.pyc
 *.swp
-.DS_Store
+*~
 .atom/
-.build/
 .buildlog/
-.history
 .svn/
-.swiftpm/
-migrate_working_dir/
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
+# Local databases & Temporary files
+*.db
+*.db-journal
+*.sqlite
+/assets/temp/
+/temp_history/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ##############################################################################
+# Secrets
+# ##############################################################################
+.env
+.env.*
+! .env.example
