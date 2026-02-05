@@ -15,7 +15,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   final _dbHelper = DatabaseHelper();
   final _aliasController = TextEditingController();
   final _commentController = TextEditingController();
-  
+
   List<String> _aliases = [];
   List<Map<String, dynamic>> _comments = [];
   bool _isLoading = true;
@@ -72,32 +72,37 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AppStrings.get(context, 'player_settings')),
-      ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildSectionTitle(AppStrings.get(context, 'alias')),
-              const SizedBox(height: 10),
-              _buildAliasInput(),
-              const SizedBox(height: 10),
-              ..._aliases.map((a) => _buildAliasTile(a)).toList(),
-              const SizedBox(height: 30),
-              _buildSectionTitle(AppStrings.get(context, 'comments')),
-              const SizedBox(height: 10),
-              _buildCommentInput(),
-              const SizedBox(height: 10),
-              ..._comments.map((c) => _buildCommentTile(c)).toList(),
-            ],
-          ),
+      appBar: AppBar(title: Text(AppStrings.get(context, 'player_settings'))),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildSectionTitle(AppStrings.get(context, 'alias')),
+                const SizedBox(height: 10),
+                _buildAliasInput(),
+                const SizedBox(height: 10),
+                ..._aliases.map((a) => _buildAliasTile(a)).toList(),
+                const SizedBox(height: 30),
+                _buildSectionTitle(AppStrings.get(context, 'comments')),
+                const SizedBox(height: 10),
+                _buildCommentInput(),
+                const SizedBox(height: 10),
+                ..._comments.map((c) => _buildCommentTile(c)).toList(),
+              ],
+            ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
-    return Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent, fontSize: 16));
+    return Text(
+      title,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.cyanAccent,
+        fontSize: 16,
+      ),
+    );
   }
 
   Widget _buildAliasInput() {
@@ -130,13 +135,21 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined, 
-                         color: isPinned ? Colors.orangeAccent : Colors.white38),
+              icon: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                color: isPinned ? Colors.orangeAccent : Colors.white38,
+              ),
               onPressed: () => _pinAlias(isPinned ? null : alias),
-              tooltip: isPinned ? AppStrings.get(context, 'unpin') : AppStrings.get(context, 'pin_desc'),
+              tooltip: isPinned
+                  ? AppStrings.get(context, 'unpin')
+                  : AppStrings.get(context, 'pin_desc'),
             ),
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+              icon: const Icon(
+                Icons.delete_outline,
+                color: Colors.redAccent,
+                size: 20,
+              ),
               onPressed: () => _deleteAlias(alias),
             ),
           ],
@@ -171,9 +184,16 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       color: Colors.white.withOpacity(0.05),
       child: ListTile(
         title: Text(c['comment']),
-        subtitle: Text(date.toString().substring(0, 16), style: const TextStyle(fontSize: 10, color: Colors.white24)),
+        subtitle: Text(
+          date.toString().substring(0, 16),
+          style: const TextStyle(fontSize: 10, color: Colors.white24),
+        ),
         trailing: IconButton(
-          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+          icon: const Icon(
+            Icons.delete_outline,
+            color: Colors.redAccent,
+            size: 20,
+          ),
           onPressed: () => _deleteComment(c['id']),
         ),
       ),

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mlbb_stats"
+    namespace = "com.mlbb.stats.analyst"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,12 +16,12 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.mlbb_stats"
+        applicationId = "com.mlbb.stats.analyst"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -41,4 +41,8 @@ android {
 
 flutter {
     source = "../.."
+}
+dependencies {
+    implementation("dev.rikka.shizuku:api:12.2.0")
+    implementation("dev.rikka.shizuku:provider:12.2.0")
 }

@@ -8,12 +8,13 @@ class PlayersManagementScreen extends StatefulWidget {
   const PlayersManagementScreen({super.key});
 
   @override
-  State<PlayersManagementScreen> createState() => _PlayersManagementScreenState();
+  State<PlayersManagementScreen> createState() =>
+      _PlayersManagementScreenState();
 }
 
 class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  
+
   List<PlayerProfile> _profiles = [];
   List<PlayerProfile> _filteredProfiles = [];
   bool _isLoading = true;
@@ -41,7 +42,7 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
       setState(() => _filteredProfiles = _profiles);
       return;
     }
-    
+
     final results = await _dbHelper.searchProfilesByAnyNickname(query);
     if (mounted) {
       setState(() => _filteredProfiles = results);
@@ -75,7 +76,9 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
               decoration: InputDecoration(
                 hintText: AppStrings.get(context, 'search_nick_hint'),
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
                 filled: true,
                 fillColor: Colors.white10,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -84,39 +87,70 @@ class _PlayersManagementScreenState extends State<PlayersManagementScreen> {
           ),
         ),
       ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : _buildPlayerList(_filteredProfiles),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildPlayerList(_filteredProfiles),
     );
   }
 
   Widget _buildPlayerList(List<PlayerProfile> list) {
-    if (list.isEmpty) return Center(child: Text(AppStrings.get(context, 'empty'), style: const TextStyle(color: Colors.grey)));
+    if (list.isEmpty)
+      return Center(
+        child: Text(
+          AppStrings.get(context, 'empty'),
+          style: const TextStyle(color: Colors.grey),
+        ),
+      );
     return ListView.builder(
       itemCount: list.length,
       itemBuilder: (context, index) {
         final p = list[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: p.isUser ? Colors.cyanAccent : Colors.deepPurpleAccent,
-            child: Icon(p.isUser ? Icons.person : Icons.people, color: Colors.black),
+            backgroundColor: p.isUser
+                ? Colors.cyanAccent
+                : Colors.deepPurpleAccent,
+            child: Icon(
+              p.isUser ? Icons.person : Icons.people,
+              color: Colors.black,
+            ),
           ),
           title: Text(
             p.pinnedAlias ?? p.mainNickname,
-            style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal),
+            style: TextStyle(
+              fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (p.pinnedAlias != null)
-                Text(p.mainNickname, style: const TextStyle(fontSize: 12, color: Colors.white54)),
-              Text("ID: ${p.id}", style: const TextStyle(fontSize: 10, color: Colors.white24)),
-              if (p.isUser) Text(AppStrings.get(context, 'you_label'), style: const TextStyle(color: Colors.cyanAccent, fontSize: 12)),
+                Text(
+                  p.mainNickname,
+                  style: const TextStyle(fontSize: 12, color: Colors.white54),
+                ),
+              Text(
+                "ID: ${p.id}",
+                style: const TextStyle(fontSize: 10, color: Colors.white24),
+              ),
+              if (p.isUser)
+                Text(
+                  AppStrings.get(context, 'you_label'),
+                  style: const TextStyle(
+                    color: Colors.cyanAccent,
+                    fontSize: 12,
+                  ),
+                ),
             ],
           ),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (c) => PlayerProfileScreen(profile: p)));
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (c) => PlayerProfileScreen(profile: p),
+              ),
+            );
           },
         );
       },

@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import '../models/game_stats.dart';
 import '../utils/database_helper.dart';
 import '../utils/data_utils.dart';
+import '../utils/app_strings.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
 
   @override
-  State<StatsScreen> createState() => _StatsScreenState();
+  State<StatsScreen> createState() => _SearchStatsScreenState();
 }
 
 class _StatsScreenState extends State<StatsScreen> {
@@ -42,9 +43,7 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Game Statistics'),
-      ),
+      appBar: AppBar(title: Text(AppStrings.get(context, 'game_stats_title'))),
       body: Column(
         children: [
           Padding(
@@ -52,7 +51,7 @@ class _StatsScreenState extends State<StatsScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                labelText: 'Search by Player Name',
+                labelText: AppStrings.get(context, 'search_player_label'),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.search),
                   onPressed: () => _searchGames(_searchController.text),
@@ -63,7 +62,7 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
           Expanded(
             child: _games.isEmpty
-                ? const Center(child: Text('No games found.'))
+                ? Center(child: Text(AppStrings.get(context, 'no_games_found')))
                 : ListView.builder(
                     itemCount: _games.length,
                     itemBuilder: (context, index) {
@@ -72,11 +71,15 @@ class _StatsScreenState extends State<StatsScreen> {
                         leading: DataUtils.getHeroIcon(game.heroId, radius: 20),
                         title: Row(
                           children: [
-                            Text('${DataUtils.getLocalizedHeroName(game.heroId, context)} - ${game.kda} • '),
+                            Text(
+                              '${DataUtils.getLocalizedHeroName(game.heroId, context)} - ${game.kda} • ',
+                            ),
                             DataUtils.getMedalIcon(game.score, size: 14),
                           ],
                         ),
-                        subtitle: Text('Players: ${game.players}\nDate: ${game.date.toString().substring(0, 10)}'),
+                        subtitle: Text(
+                          '${AppStrings.get(context, 'players_label')} ${game.players}\n${AppStrings.get(context, 'date_label')} ${game.date.toString().substring(0, 10)}',
+                        ),
                         isThreeLine: true,
                       );
                     },

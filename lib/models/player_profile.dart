@@ -2,7 +2,7 @@ class PlayerProfile {
   final int? id;
   String mainNickname;
   final bool isUser;
-  String? pinnedAlias; 
+  String? pinnedAlias;
   int serverId; // Added serverId
 
   PlayerProfile({

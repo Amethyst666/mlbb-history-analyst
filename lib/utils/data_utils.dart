@@ -6,11 +6,16 @@ class DataUtils {
   static int getHeroIdByName(String name) {
     final lower = name.toLowerCase();
     try {
-      return GameData.heroes.firstWhere(
-        (e) => e.en.toLowerCase() == lower || e.ru.toLowerCase() == lower || e.assetName.toLowerCase() == lower
-      ).id;
+      return GameData.heroes
+          .firstWhere(
+            (e) =>
+                e.en.toLowerCase() == lower ||
+                e.ru.toLowerCase() == lower ||
+                e.assetName.toLowerCase() == lower,
+          )
+          .id;
     } catch (e) {
-      return 0; 
+      return 0;
     }
   }
 
@@ -27,20 +32,33 @@ class DataUtils {
   }
 
   static String getLocalizedRoleName(String role, BuildContext context) {
-    if (role == 'unknown' || role == 'none') return AppStrings.get(context, 'unknown');
-    
+    if (role == 'unknown' || role == 'none')
+      return AppStrings.get(context, 'unknown');
+
     // Map internal role IDs to AppStrings keys if necessary
     String key = role;
     if (role == 'gold') key = 'gold_lane';
     if (role == 'exp') key = 'exp_lane';
-    
+
     return AppStrings.get(context, key);
+  }
+
+  static String getLocalizedBlessingName(int blessingId, BuildContext context) {
+    if (blessingId == 0) return "";
+    final locale = Localizations.localeOf(context).languageCode;
+    try {
+      final entity = GameData.getBlessing(blessingId);
+      if (entity == null) return "Blessing $blessingId";
+      return locale == 'ru' ? entity.ru : entity.en;
+    } catch (_) {
+      return "Blessing $blessingId";
+    }
   }
 
   static Widget getHeroIcon(int heroId, {double radius = 15}) {
     final entity = GameData.getHero(heroId);
     final String assetName = entity?.assetName ?? 'unknown';
-    
+
     return CircleAvatar(
       radius: radius,
       backgroundColor: Colors.grey[800],
@@ -70,11 +88,22 @@ class DataUtils {
       errorBuilder: (context, error, stackTrace) {
         IconData icon = Icons.help_outline;
         Color color = Colors.grey;
-        if (role == 'jungle') { icon = Icons.forest; color = Colors.green; }
-        else if (role == 'roam') { icon = Icons.flag; color = Colors.blue; }
-        else if (role == 'gold') { icon = Icons.monetization_on; color = Colors.amber; }
-        else if (role == 'mid') { icon = Icons.flash_on; color = Colors.purpleAccent; }
-        else if (role == 'exp') { icon = Icons.shield; color = Colors.brown; }
+        if (role == 'jungle') {
+          icon = Icons.forest;
+          color = Colors.green;
+        } else if (role == 'roam') {
+          icon = Icons.flag;
+          color = Colors.blue;
+        } else if (role == 'gold') {
+          icon = Icons.monetization_on;
+          color = Colors.amber;
+        } else if (role == 'mid') {
+          icon = Icons.flash_on;
+          color = Colors.purpleAccent;
+        } else if (role == 'exp') {
+          icon = Icons.shield;
+          color = Colors.brown;
+        }
         return Icon(icon, size: size, color: color);
       },
     );
@@ -127,8 +156,10 @@ class DataUtils {
               height: size,
               color: Colors.deepPurpleAccent,
               child: Center(
-                child: Text("?", 
-                style: TextStyle(color: Colors.white, fontSize: size * 0.5)),
+                child: Text(
+                  "?",
+                  style: TextStyle(color: Colors.white, fontSize: size * 0.5),
+                ),
               ),
             ),
           );
@@ -140,9 +171,9 @@ class DataUtils {
   static String getLocalizedItemName(int itemId, BuildContext context) {
     if (itemId == 0) return "";
     final locale = Localizations.localeOf(context).languageCode;
-    
+
     // TODO: Handle combined item IDs (e.g. Boots + Blessing) here
-    
+
     try {
       final entity = GameData.getItem(itemId);
       if (entity == null) return "Item $itemId";
@@ -152,7 +183,11 @@ class DataUtils {
     }
   }
 
-  static Widget getItemIcon(int itemId, {double size = 40, BoxFit fit = BoxFit.cover}) {
+  static Widget getItemIcon(
+    int itemId, {
+    double size = 40,
+    BoxFit fit = BoxFit.cover,
+  }) {
     if (itemId == 0) {
       return Container(
         width: size,
@@ -188,7 +223,11 @@ class DataUtils {
           child: Center(
             child: Text(
               "?",
-              style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: size * 0.5),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontSize: size * 0.5,
+              ),
             ),
           ),
         );
@@ -197,34 +236,35 @@ class DataUtils {
 
     // If item has a blessing (Roam/Jungle), overlay it
     if (entity?.blessingId != null) {
-       final blessingEntity = GameData.getSpell(entity!.blessingId!);
-       if (blessingEntity != null) {
-         return Stack(
-           children: [
-             ClipRRect(borderRadius: BorderRadius.circular(4), child: baseIcon),
-             Positioned(
-               bottom: 0,
-               right: 0,
-               child: Container(
-                 width: size * 0.5,
-                 height: size * 0.5,
-                 decoration: BoxDecoration(
-                   shape: BoxShape.circle,
-                   border: Border.all(color: Colors.white, width: 0.2),
-                   color: Colors.black54,
-                 ),
-                 child: ClipOval(
-                   child: Image.asset(
+      final blessingEntity = GameData.getSpell(entity!.blessingId!);
+      if (blessingEntity != null) {
+        return Stack(
+          children: [
+            ClipRRect(borderRadius: BorderRadius.circular(4), child: baseIcon),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: size * 0.5,
+                height: size * 0.5,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 0.2),
+                  color: Colors.black54,
+                ),
+                child: ClipOval(
+                  child: Image.asset(
                     'assets/blessings/${blessingEntity.assetName}.png',
                     fit: BoxFit.cover,
-                    errorBuilder: (c,e,s) => const Icon(Icons.star, size: 8, color: Colors.amber),
-                   ),
-                 ),
-               ),
-             ),
-           ],
-         );
-       }
+                    errorBuilder: (c, e, s) =>
+                        const Icon(Icons.star, size: 8, color: Colors.amber),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
     }
 
     return ClipRRect(borderRadius: BorderRadius.circular(4), child: baseIcon);
@@ -232,14 +272,18 @@ class DataUtils {
 
   static Widget getMedalIcon(int score, {double size = 20}) {
     if (score == 0) return const SizedBox.shrink();
-    
+
     int medalId = score;
     String assetName = '';
-    if (medalId == 1) assetName = 'mvp';
-    else if (medalId == 2) assetName = 'gold_medal';
-    else if (medalId == 3) assetName = 'silver_medal';
-    else if (medalId == 4) assetName = 'bronze_medal';
-    
+    if (medalId == 1)
+      assetName = 'mvp';
+    else if (medalId == 2)
+      assetName = 'gold_medal';
+    else if (medalId == 3)
+      assetName = 'silver_medal';
+    else if (medalId == 4)
+      assetName = 'bronze_medal';
+
     if (assetName.isNotEmpty) {
       return Image.asset(
         'assets/medals/$assetName.png',
@@ -247,12 +291,16 @@ class DataUtils {
         height: size,
         fit: BoxFit.contain,
         errorBuilder: (c, e, s) => Text(
-          "$score", 
-          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: size * 0.8)
+          "$score",
+          style: TextStyle(
+            color: Colors.amber,
+            fontWeight: FontWeight.bold,
+            fontSize: size * 0.8,
+          ),
         ),
       );
     }
-    
+
     return const SizedBox.shrink();
   }
 

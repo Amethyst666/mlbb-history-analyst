@@ -3,8 +3,9 @@ import 'package:flutter/services.dart';
 class DurationInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue, TextEditingValue newValue) {
-    
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     // 1. Оставляем только цифры
     String newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
 

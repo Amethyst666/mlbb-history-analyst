@@ -5,7 +5,7 @@ class PlayerStats {
   final String kda;
   final String gold;
   final List<int> itemIds;
-  final int score; 
+  final int score;
   final bool isEnemy;
   final bool isUser;
   final String role;
@@ -15,20 +15,20 @@ class PlayerStats {
   final String? playerId;
   final int teamId;
   final int serverId;
-  
+
   final int level;
-  final int goldLane; 
-  final int goldKill; 
-  final int goldTower; 
-  final int goldJungle; 
-  
-  final int damageHero; 
-  final int damageTower; 
-  final int damageTaken; 
-  final int heal; 
-  final int ccDuration; 
-  final int killStreak; 
-  
+  final int goldLane;
+  final int goldKill;
+  final int goldTower;
+  final int goldJungle;
+
+  final int damageHero;
+  final int damageTower;
+  final int damageTaken;
+  final int heal;
+  final int ccDuration;
+  final int killStreak;
+
   final String clan;
   final int partyId;
 
@@ -72,7 +72,7 @@ class PlayerStats {
       'kda': kda,
       'gold': gold,
       'items': itemIds.join(','),
-      'score': score, 
+      'score': score,
       'is_enemy': isEnemy ? 1 : 0,
       'is_user': isUser ? 1 : 0,
       'role': role,
@@ -98,9 +98,14 @@ class PlayerStats {
   factory PlayerStats.fromMap(Map<String, dynamic> map) {
     List<int> parsedItems = [];
     if (map['items'] != null && map['items'].toString().isNotEmpty) {
-      parsedItems = map['items'].toString().split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
+      parsedItems = map['items']
+          .toString()
+          .split(',')
+          .map((e) => int.tryParse(e) ?? 0)
+          .where((e) => e != 0)
+          .toList();
     }
-    
+
     int parsedScore = 0;
     if (map['score'] is int) {
       parsedScore = map['score'];
@@ -135,7 +140,7 @@ class PlayerStats {
       killStreak: map['kill_streak'] ?? 0,
       clan: map['clan'] ?? '',
       partyId: map['party_id'] ?? 0,
-      playerId: map['playerId'], 
+      playerId: map['playerId'],
     );
   }
 
@@ -146,7 +151,7 @@ class PlayerStats {
     String? kda,
     String? gold,
     List<int>? itemIds,
-    int? score, 
+    int? score,
     bool? isEnemy,
     bool? isUser,
     String? role,

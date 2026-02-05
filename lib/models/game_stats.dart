@@ -50,7 +50,12 @@ class GameStats {
   factory GameStats.fromMap(Map<String, dynamic> map) {
     List<int> parsedItems = [];
     if (map['items'] != null && map['items'].toString().isNotEmpty) {
-      parsedItems = map['items'].toString().split(',').map((e) => int.tryParse(e) ?? 0).where((e) => e != 0).toList();
+      parsedItems = map['items']
+          .toString()
+          .split(',')
+          .map((e) => int.tryParse(e) ?? 0)
+          .where((e) => e != 0)
+          .toList();
     }
 
     return GameStats(

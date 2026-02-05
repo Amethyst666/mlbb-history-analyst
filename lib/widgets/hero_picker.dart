@@ -17,7 +17,9 @@ class _HeroPickerState extends State<HeroPicker> {
     final filtered = GameData.heroes.where((h) {
       if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
-      return h.id.toString().contains(query) || h.en.toLowerCase().contains(query) || h.ru.toLowerCase().contains(query);
+      return h.id.toString().contains(query) ||
+          h.en.toLowerCase().contains(query) ||
+          h.ru.toLowerCase().contains(query);
     }).toList();
 
     return Container(
@@ -44,13 +46,20 @@ class _HeroPickerState extends State<HeroPicker> {
               itemBuilder: (context, index) {
                 final hero = filtered[index];
                 return GestureDetector(
-                  onTap: () => Navigator.pop(context, hero.assetName), // Returning assetName (String) for compatibility
+                  onTap: () => Navigator.pop(
+                    context,
+                    hero.assetName,
+                  ), // Returning assetName (String) for compatibility
                   child: Column(
                     children: [
                       Expanded(
                         child: DataUtils.getHeroIcon(hero.id, radius: 30),
                       ),
-                      Text(hero.en, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis),
+                      Text(
+                        hero.en,
+                        style: const TextStyle(fontSize: 10),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 );

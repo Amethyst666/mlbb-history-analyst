@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../utils/app_strings.dart';
 import '../utils/database_helper.dart';
 import 'asset_gallery_screen.dart';
+import 'history_folder_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,40 +17,104 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const platform = MethodChannel('com.mlbb.stats.analyst/saf');
+  final _dbHelper = DatabaseHelper();
+
+  final _nickController = TextEditingController();
+  final _customShizukuPathController = TextEditingController();
+
   bool _isDeveloperMode = false;
-  final TextEditingController _nickController = TextEditingController();
-  final TextEditingController _pathController = TextEditingController();
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  bool _autoImport = false;
+  String _accessMode = 'none';
+  String? _safUri;
+  String _appVersion = '2.3.2';
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _dbHelper.updateNotifier.addListener(_loadSettings);
   }
 
   @override
   void dispose() {
+    _dbHelper.updateNotifier.removeListener(_loadSettings);
     _nickController.dispose();
-    _pathController.dispose();
+    _customShizukuPathController.dispose();
     super.dispose();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString('userId') ?? '';
-    final historyPath = prefs.getString('historyPath') ?? '';
+    final mode = prefs.getString('history_mode') ?? 'none';
+    final uri = prefs.getString('history_saf_uri');
+    final auto = prefs.getBool('auto_import') ?? false;
+    final customPath = prefs.getString('shizuku_custom_path') ?? '';
+
+    final packageInfo = await PackageInfo.fromPlatform();
+
     setState(() {
       _isDeveloperMode = prefs.getBool('isDeveloperMode') ?? false;
+      _autoImport = auto;
       _nickController.text = userId;
-      _pathController.text = historyPath;
+      _customShizukuPathController.text = customPath;
+      _accessMode = mode;
+      _safUri = uri;
+      _appVersion = packageInfo.version;
     });
+  }
+
+  Future<void> _toggleAutoImport(bool value) async {
+    if (value && _accessMode == 'none') {
+      _showSetupWizard();
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_import', value);
+    setState(() => _autoImport = value);
+    _dbHelper.updateNotifier.notifyListeners();
+  }
+
+  Future<void> _resetAccessMethod() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('history_mode', 'none');
+    await prefs.remove('history_saf_uri');
+    setState(() {
+      _accessMode = 'none';
+      _safUri = null;
+    });
+    _dbHelper.updateNotifier.notifyListeners();
+  }
+
+  void _showSetupWizard() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const HistoryFolderScreen()),
+    ).then((result) {
+      if (result != null && result is String) {
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result)));
+      }
+      _loadSettings();
+      _dbHelper.updateNotifier.notifyListeners();
+    });
+  }
+
+  Future<void> _toggleDeveloperMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDeveloperMode', value);
+    setState(() => _isDeveloperMode = value);
+    _dbHelper.updateNotifier.notifyListeners();
   }
 
   Future<void> _saveNickname(String value) async {
     if (value.trim().isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userId', value.trim());
-    
+    await _dbHelper.updateUserIdentity(value.trim());
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppStrings.get(context, 'save_id_success'))),
@@ -55,29 +122,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _pickHistoryFolder() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-    if (selectedDirectory != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('historyPath', selectedDirectory);
-      setState(() {
-        _pathController.text = selectedDirectory;
-      });
-    }
-  }
-
-  Future<void> _toggleDeveloperMode(bool value) async {
+  Future<void> _saveCustomShizukuPath(String value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDeveloperMode', value);
-    setState(() {
-      _isDeveloperMode = value;
-    });
-  }
-
-  void _showThemeUnavailableMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.get(context, 'theme_unavailable'))),
-    );
+    await prefs.setString('shizuku_custom_path', value.trim());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.get(context, 'path_saved'))),
+      );
+    }
   }
 
   Future<void> _changeLanguage() async {
@@ -90,9 +142,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentLangCode = Localizations.localeOf(context).languageCode;
-    final langName = currentLangCode == 'en' ? 'English' : 'Русский';
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final langName = Localizations.localeOf(context).languageCode == 'en'
+        ? 'English'
+        : 'Русский';
 
     return Scaffold(
       appBar: AppBar(title: Text(AppStrings.get(context, 'settings'))),
@@ -100,101 +152,132 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _nickController,
-                  decoration: InputDecoration(
-                    labelText: AppStrings.get(context, 'my_game_id_label'), 
-                    hintText: AppStrings.get(context, 'my_game_id_hint'),
-                    prefixIcon: const Icon(Icons.perm_identity),
-                    border: const OutlineInputBorder(),
-                    helperText: AppStrings.get(context, 'my_game_id_helper'),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.save),
-                      onPressed: () => _saveNickname(_nickController.text),
-                    ),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onSubmitted: _saveNickname,
+            child: TextField(
+              controller: _nickController,
+              decoration: InputDecoration(
+                labelText: AppStrings.get(context, 'my_game_id_label'),
+                prefixIcon: const Icon(Icons.perm_identity),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.save),
+                  onPressed: () => _saveNickname(_nickController.text),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _pathController,
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: AppStrings.get(context, 'history_path_label'),
-                    hintText: AppStrings.get(context, 'history_path_hint'),
-                    prefixIcon: const Icon(Icons.folder),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.folder_open),
-                      onPressed: _pickHistoryFolder,
-                    ),
-                  ),
-                  onTap: _pickHistoryFolder,
-                ),
-              ],
+              ),
+              keyboardType: TextInputType.number,
             ),
           ),
+          const Divider(),
+
+          SwitchListTile(
+            secondary: const Icon(Icons.sync),
+            title: Text(AppStrings.get(context, 'auto_import_title')),
+            subtitle: Text(AppStrings.get(context, 'auto_import_desc')),
+            value: _autoImport,
+            onChanged: _toggleAutoImport,
+            activeColor: Colors.cyanAccent,
+          ),
+
+          if (_accessMode == 'none')
+            ListTile(
+              leading: const Icon(Icons.folder_open, color: Colors.amber),
+              title: Text(AppStrings.get(context, 'setup_access')),
+              subtitle: Text(AppStrings.get(context, 'import_method_desc')),
+              onTap: _showSetupWizard,
+            )
+          else
+            ListTile(
+              leading: Icon(
+                _accessMode == 'saf' ? Icons.folder_shared : Icons.adb,
+                color: _accessMode == 'saf' ? Colors.amber : Colors.blueAccent,
+              ),
+              title: Text(
+                AppStrings.get(context, 'access_label') +
+                    _accessMode.toUpperCase(),
+              ),
+              subtitle: Text(AppStrings.get(context, 'reset_access_desc')),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: Text(AppStrings.get(context, 'reset_access_desc')),
+                    content: Text(
+                      AppStrings.get(context, 'reset_access_desc') + "?",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(c),
+                        child: Text(AppStrings.get(context, 'cancel')),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          _resetAccessMethod();
+                          if (_autoImport) _toggleAutoImport(false);
+                          Navigator.pop(c);
+                        },
+                        child: Text(
+                          AppStrings.get(context, 'ok'),
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
           const Divider(),
           ListTile(
             leading: const Icon(Icons.language),
             title: Text(AppStrings.get(context, 'language')),
             subtitle: Text(langName),
-            trailing: const Icon(Icons.swap_horiz),
             onTap: _changeLanguage,
           ),
-          ListTile(
-            leading: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
-            title: Text(AppStrings.get(context, 'theme')),
-            subtitle: Text(isDark ? AppStrings.get(context, 'dark_mode') : AppStrings.get(context, 'light_mode')),
-            onTap: _showThemeUnavailableMessage,
-            trailing: Switch(
-              value: isDark, 
-              onChanged: (_) => _showThemeUnavailableMessage(),
-              activeColor: Colors.deepPurpleAccent,
-            ),
-          ),
           const Divider(),
-          ListTile(
-            leading: const Icon(Icons.developer_mode),
+
+          SwitchListTile(
+            secondary: const Icon(Icons.developer_mode),
             title: Text(AppStrings.get(context, 'developer_mode')),
-            subtitle: Text(AppStrings.get(context, 'dev_mode_subtitle')),
-            trailing: Switch(
-              value: _isDeveloperMode,
-              onChanged: _toggleDeveloperMode,
-              activeColor: Colors.deepPurpleAccent,
-            ),
+            value: _isDeveloperMode,
+            onChanged: _toggleDeveloperMode,
+            activeColor: Colors.deepPurpleAccent,
           ),
+
           if (_isDeveloperMode) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
+              ),
+              child: TextField(
+                controller: _customShizukuPathController,
+                decoration: InputDecoration(
+                  labelText: AppStrings.get(context, 'custom_shizuku_path'),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.save),
+                    onPressed: () => _saveCustomShizukuPath(
+                      _customShizukuPathController.text,
+                    ),
+                  ),
+                ),
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.collections),
               title: Text(AppStrings.get(context, 'asset_gallery')),
-              subtitle: Text(AppStrings.get(context, 'check_icons')),
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const AssetGalleryScreen()));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_remove, color: Colors.orangeAccent),
-              title: Text(AppStrings.get(context, 'cleanup_players')),
-              subtitle: Text(AppStrings.get(context, 'cleanup_players_desc')),
-              onTap: () async {
-                final count = await _dbHelper.deleteUnusedProfiles();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("${AppStrings.get(context, 'deleted_profiles')}$count")),
-                  );
-                }
-              },
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AssetGalleryScreen(),
+                ),
+              ),
             ),
           ],
+
           ListTile(
             leading: const Icon(Icons.info),
             title: Text(AppStrings.get(context, 'about')),
-            subtitle: Text("${AppStrings.get(context, 'version')} 2.1.0"),
-            onTap: () {},
+            subtitle: Text("MLBB Analyst v$_appVersion"),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../utils/game_data.dart';
 import '../utils/data_utils.dart';
+import '../utils/app_strings.dart';
 
 class AssetGalleryScreen extends StatelessWidget {
   const AssetGalleryScreen({super.key});
@@ -11,32 +12,32 @@ class AssetGalleryScreen extends StatelessWidget {
       length: 5,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Asset Gallery'),
-          bottom: const TabBar(
+          title: Text(AppStrings.get(context, 'asset_gallery')),
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Heroes'),
-              Tab(text: 'Items'),
-              Tab(text: 'Roles'),
-              Tab(text: 'Blessings'),
-              Tab(text: 'Spells'),
+              Tab(text: AppStrings.get(context, 'heroes_tab')),
+              Tab(text: AppStrings.get(context, 'items_tab')),
+              Tab(text: AppStrings.get(context, 'roles_tab')),
+              Tab(text: AppStrings.get(context, 'blessings_tab')),
+              Tab(text: AppStrings.get(context, 'spells_tab')),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _buildHeroGrid(),
-            _buildItemGrid(),
-            _buildRoleGrid(),
-            _buildBlessingGrid(),
-            _buildSpellGrid(),
+            _buildHeroGrid(context),
+            _buildItemGrid(context),
+            _buildRoleGrid(context),
+            _buildBlessingGrid(context),
+            _buildSpellGrid(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeroGrid() {
+  Widget _buildHeroGrid(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -50,14 +51,19 @@ class AssetGalleryScreen extends StatelessWidget {
           children: [
             DataUtils.getHeroIcon(hero.id, radius: 30),
             const SizedBox(height: 4),
-            Text(hero.en, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center, maxLines: 1),
+            Text(
+              DataUtils.getLocalizedHeroName(hero.id, context),
+              style: const TextStyle(fontSize: 10),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _buildItemGrid() {
+  Widget _buildItemGrid(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -71,37 +77,52 @@ class AssetGalleryScreen extends StatelessWidget {
           children: [
             DataUtils.getItemIcon(item.id, size: 40),
             const SizedBox(height: 4),
-            Text(item.en, style: const TextStyle(fontSize: 9), textAlign: TextAlign.center, maxLines: 1),
+            Text(
+              DataUtils.getLocalizedItemName(item.id, context),
+              style: const TextStyle(fontSize: 9),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _buildRoleGrid() {
+  Widget _buildRoleGrid(BuildContext context) {
     final roles = ['exp', 'jungle', 'mid', 'gold', 'roam'];
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Wrap(
         spacing: 20,
         runSpacing: 20,
-        children: roles.map((role) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(10)),
-              child: DataUtils.getRoleIcon(role, size: 60),
-            ),
-            const SizedBox(height: 8),
-            Text(role.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        )).toList(),
+        children: roles
+            .map(
+              (role) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: DataUtils.getRoleIcon(role, size: 60),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    DataUtils.getLocalizedRoleName(role, context).toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
       ),
     );
   }
 
-  Widget _buildBlessingGrid() {
+  Widget _buildBlessingGrid(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -117,23 +138,31 @@ class AssetGalleryScreen extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Image.asset(
                 'assets/blessings/${b.assetName}.png',
                 width: 50,
                 height: 50,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50, color: Colors.red),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.broken_image, size: 50, color: Colors.red),
               ),
             ),
             const SizedBox(height: 4),
-            Text(b.en, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center),
+            Text(
+              DataUtils.getLocalizedBlessingName(b.id, context),
+              style: const TextStyle(fontSize: 10),
+              textAlign: TextAlign.center,
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _buildSpellGrid() {
+  Widget _buildSpellGrid(BuildContext context) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -149,7 +178,12 @@ class AssetGalleryScreen extends StatelessWidget {
           children: [
             DataUtils.getSpellIcon(spell.id, size: 50),
             const SizedBox(height: 4),
-            Text(spell.en, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center, maxLines: 1),
+            Text(
+              DataUtils.getLocalizedSpellName(spell.id, context),
+              style: const TextStyle(fontSize: 10),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
           ],
         );
       },

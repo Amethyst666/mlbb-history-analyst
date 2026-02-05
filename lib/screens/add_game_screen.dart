@@ -40,7 +40,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
   Future<void> _loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _userId = prefs.getString('userGameId');
+      _userId = prefs.getString('userId');
     });
   }
 
@@ -52,7 +52,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
     if (result != null) {
       File file = File(result.files.single.path!);
       String fileName = result.files.single.name;
-      
+
       String mId = fileName;
       if (fileName.contains('-')) {
         mId = fileName.split('-').last;
@@ -65,8 +65,12 @@ class _AddGameScreenState extends State<AddGameScreen> {
         _isParsing = true;
       });
 
-      final parsed = await HistoryParser.parseFile(file, userGameId: _userId, matchId: _matchId);
-      
+      final parsed = await HistoryParser.parseFile(
+        file,
+        userGameId: _userId,
+        matchId: _matchId,
+      );
+
       if (parsed != null) {
         setState(() {
           gameResult = parsed.game.result;
@@ -79,7 +83,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
         setState(() => _isParsing = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Failed to parse history file.")),
+            SnackBar(content: Text(AppStrings.get(context, 'parse_failed'))),
           );
         }
       }
@@ -89,17 +93,22 @@ class _AddGameScreenState extends State<AddGameScreen> {
   Future<void> _saveGame() async {
     if (players.isEmpty) return;
 
-    final userStats = players.firstWhere((p) => p.isUser, orElse: () => players.first);
+    PlayerStats? userStats;
+    try {
+      userStats = players.firstWhere((p) => p.isUser);
+    } catch (_) {
+      userStats = null;
+    }
 
     final game = GameStats(
       matchId: _matchId ?? "",
       result: gameResult,
-      heroId: userStats.heroId,
-      kda: userStats.kda,
-      itemIds: userStats.itemIds,
-      score: userStats.score,
-      role: userStats.role,
-      spellId: userStats.spellId,
+      heroId: userStats?.heroId ?? 0,
+      kda: userStats?.kda ?? "0/0/0",
+      itemIds: userStats?.itemIds ?? [],
+      score: userStats?.score ?? 0,
+      role: userStats?.role ?? 'unknown',
+      spellId: userStats?.spellId ?? 0,
       players: players.map((p) => p.nickname).join(', '),
       date: matchDate,
       duration: duration,
@@ -112,7 +121,7 @@ class _AddGameScreenState extends State<AddGameScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error saving game. Possibly duplicate match ID.")),
+          SnackBar(content: Text(AppStrings.get(context, 'save_error'))),
         );
       }
     }
@@ -129,12 +138,20 @@ class _AddGameScreenState extends State<AddGameScreen> {
             ElevatedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.file_open),
-              label: Text(_file == null ? "Select History File" : "Change File"),
+              label: Text(
+                _file == null
+                    ? AppStrings.get(context, 'select_history_file')
+                    : AppStrings.get(context, 'change_file'),
+              ),
             ),
-            if (_file != null) Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text("File: ${_file!.path.split('/').last}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ),
+            if (_file != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  "File: ${_file!.path.split('/').last}",
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
             const Divider(),
             if (_isParsing) const Center(child: CircularProgressIndicator()),
             if (!_isParsing && players.isNotEmpty) ...[
@@ -142,25 +159,64 @@ class _AddGameScreenState extends State<AddGameScreen> {
                 child: ListView(
                   children: [
                     ListTile(
-                      title: Text("Result: $gameResult", style: TextStyle(color: gameResult == 'VICTORY' ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
-                      subtitle: Text("Date: ${matchDate.toString().substring(0, 16)} | Duration: $duration"),
+                      title: Text(
+                        "${AppStrings.get(context, 'result_label')}${gameResult == 'VICTORY' ? AppStrings.get(context, 'victory') : AppStrings.get(context, 'defeat')}",
+                        style: TextStyle(
+                          color: gameResult == 'VICTORY'
+                              ? Colors.green
+                              : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        "${AppStrings.get(context, 'date_label')}${matchDate.toString().substring(0, 16)} | ${AppStrings.get(context, 'duration')}: $duration",
+                      ),
                     ),
                     const Divider(),
-                    ...players.map((p) => ListTile(
-                      leading: DataUtils.getHeroIcon(p.heroId, radius: 20),
-                      title: Text(p.nickname, style: TextStyle(fontWeight: p.isUser ? FontWeight.bold : FontWeight.normal, color: p.isUser ? Colors.cyanAccent : Colors.white)),
-                      subtitle: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text("${AppStrings.get(context, 'kda')}: ${p.kda} • "),
-                          DataUtils.getMedalIcon(p.score, size: 14),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.monetization_on, color: Color(0xFFFFD700), size: 12),
-                          const SizedBox(width: 2),
-                          Text(p.gold, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                        ],
-                      ),
-                    )).toList(),
+                    ...players
+                        .map(
+                          (p) => ListTile(
+                            leading: DataUtils.getHeroIcon(
+                              p.heroId,
+                              radius: 20,
+                            ),
+                            title: Text(
+                              p.nickname,
+                              style: TextStyle(
+                                fontWeight: p.isUser
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: p.isUser
+                                    ? Colors.cyanAccent
+                                    : Colors.white,
+                              ),
+                            ),
+                            subtitle: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  "${AppStrings.get(context, 'kda')}: ${p.kda} • ",
+                                ),
+                                DataUtils.getMedalIcon(p.score, size: 14),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.monetization_on,
+                                  color: Color(0xFFFFD700),
+                                  size: 12,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  p.gold,
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ],
                 ),
               ),
@@ -169,11 +225,14 @@ class _AddGameScreenState extends State<AddGameScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _saveGame,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurpleAccent,
+                    foregroundColor: Colors.white,
+                  ),
                   child: Text(AppStrings.get(context, 'save_match')),
                 ),
               ),
-            ]
+            ],
           ],
         ),
       ),

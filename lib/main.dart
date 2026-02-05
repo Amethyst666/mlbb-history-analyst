@@ -14,19 +14,13 @@ final appThemeNotifier = ValueNotifier(ThemeMode.dark);
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  
+
   final savedLang = prefs.getString('language_code');
   if (savedLang != null) appLocaleNotifier.value = Locale(savedLang);
 
-  final savedTheme = prefs.getString('theme_mode');
-  if (savedTheme == 'light') {
-    appThemeNotifier.value = ThemeMode.light;
-  } else if (savedTheme == 'dark') {
-    appThemeNotifier.value = ThemeMode.dark;
-  } else {
-    appThemeNotifier.value = ThemeMode.system;
-  }
-  
+  // Force Dark Theme
+  appThemeNotifier.value = ThemeMode.dark;
+
   runApp(const MyApp());
 }
 
@@ -103,11 +97,26 @@ class _MainScreenState extends State<MainScreen> {
         selectedIndex: _selectedIndex,
         onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.history), label: AppStrings.get(context, 'recent')),
-          NavigationDestination(icon: const Icon(Icons.analytics), label: AppStrings.get(context, 'stats')),
-          NavigationDestination(icon: const Icon(Icons.search), label: AppStrings.get(context, 'search')),
-          NavigationDestination(icon: const Icon(Icons.people), label: AppStrings.get(context, 'manage_players')),
-          NavigationDestination(icon: const Icon(Icons.settings), label: AppStrings.get(context, 'settings')),
+          NavigationDestination(
+            icon: const Icon(Icons.history),
+            label: AppStrings.get(context, 'recent'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.analytics),
+            label: AppStrings.get(context, 'stats'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.search),
+            label: AppStrings.get(context, 'search'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.people),
+            label: AppStrings.get(context, 'manage_players'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.settings),
+            label: AppStrings.get(context, 'settings'),
+          ),
         ],
       ),
     );
