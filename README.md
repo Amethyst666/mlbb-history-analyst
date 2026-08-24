@@ -4,11 +4,14 @@ Advanced Mobile Legends: Bang Bang match history analyzer and statistics tracker
 
 ## Features
 
-- **Match History Parsing:** Reads binary match files directly from the game's data folder.
-- **Detailed Statistics:** Calculates KDA, Gold, Damage, Healing, and more.
-- **Player Profiles:** Tracks player performance across matches.
+- **Match History Parsing:** Reads binary match files (`FightHistory`) directly from game directories. Supports 5v5 (Classic & Ranked) modes and automatically ignores non-5v5 modes.
+- **Detailed Statistics:** Calculates KDA, Gold, Damage (Dealt, Taken, Tower/Push), Healing, and CC Duration per match.
+- **Lane & Role Breakdown:** Categorized by Lanes (EXP, Mid, Roam, Jungle, Gold) with localized names and pie chart breakdown.
+- **Global Server Stats:** Displays server winrate, pickrate, and banrate alongside personal performance.
+- **Teammates & Player Profiles:** Track teammate synergy, wins, losses, alias management, and custom notes.
+- **Database Maintenance:** One-tap cleanup of broken or non-5v5 matches.
 - **Asset Gallery:** View heroes, items, and spells data.
-- **Multi-Language Support:** English and Russian.
+- **Multi-Language Support:** English and Russian localization.
 - **Dark Mode:** Modern UI.
 
 ## Installation & Setup
@@ -41,8 +44,8 @@ This method uses ADB permissions to access files directly, bypassing system pick
 ## Usage
 
 1.  Open the app.
-2.  Tap the **+** button on the main screen to import recent matches.
-3.  View match details and player statistics.
+2.  Tap the **+** button on the main screen to import recent 5v5 matches.
+3.  View match details, hero statistics, lane performance, and teammate profiles.
 
 ## Development
 
@@ -54,11 +57,13 @@ flutter run
 ```
 
 ### Dependencies
-- `sqflite`: Local database.
+- `sqflite`: Local database storage.
 - `permission_handler`: Permission management.
 - `file_picker`: File selection.
-- `rikka.shizuku`: Shizuku integration (Android).
+- `http`: Fetching global server statistics.
+- `shared_preferences`: User settings persistence.
 
 ## License
 
 MIT
+
