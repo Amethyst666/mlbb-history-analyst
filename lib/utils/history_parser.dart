@@ -227,6 +227,13 @@ class HistoryParser {
         finalPlayers.add(s.copyWith(isEnemy: s.teamId != refTeam));
       }
 
+      // Validate 5v5 mode (exactly 10 players, 5 allies and 5 enemies)
+      int alliesCount = finalPlayers.where((p) => !p.isEnemy).length;
+      int enemiesCount = finalPlayers.where((p) => p.isEnemy).length;
+      if (finalPlayers.length != 10 || alliesCount != 5 || enemiesCount != 5) {
+        return null;
+      }
+
       // Metadata: Match ID and Precise Duration
       String? foundMatchId;
       int durSecs = 0;

@@ -573,6 +573,14 @@ class DatabaseHelper {
     List<PlayerStats> players,
   ) async {
     if (game.matchId.isNotEmpty && await isGameExists(game.matchId)) return -1;
+    
+    // Validate 5v5 mode: exactly 10 players, 5 allies and 5 enemies
+    int alliesCount = players.where((p) => !p.isEnemy).length;
+    int enemiesCount = players.where((p) => p.isEnemy).length;
+    if (players.length != 10 || alliesCount != 5 || enemiesCount != 5) {
+      return -1;
+    }
+    
     Database db = await database;
     try {
       int id = await db.transaction((txn) async {
@@ -949,12 +957,15 @@ class DatabaseHelper {
   Future<int> deleteBrokenGames() async {
     Database db = await database;
     
-    // Find broken games: not 10 players or max score is 0
+    // Find broken games: not 5v5 (allies != 5 or enemies != 5) or max score is 0
     final brokenGames = await db.rawQuery('''
       SELECT id FROM games 
       WHERE (
-        SELECT COUNT(*) FROM game_players WHERE game_id = games.id
-      ) != 10 
+        SELECT COUNT(*) FROM game_players WHERE game_id = games.id AND is_enemy = 0
+      ) != 5 
+      OR (
+        SELECT COUNT(*) FROM game_players WHERE game_id = games.id AND is_enemy = 1
+      ) != 5 
       OR (
         SELECT MAX(CAST(score AS INTEGER)) FROM game_players WHERE game_id = games.id
       ) = 0
