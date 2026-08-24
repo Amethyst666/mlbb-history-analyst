@@ -23,7 +23,7 @@ This is the official Android method, but it requires manual folder selection.
 1.  Go to **Settings** -> **File Access Method**.
 2.  Select **SAF (System Picker)**.
 3.  Click **Select SAF Folder**.
-4.  Navigate to `Android > data > com.mobile.legends > files > dragon2017 > `FightHistory`.
+4.  Navigate to `Android > data > com.mobile.legends > files > dragon2017 > FightHistory`.
     *   For AppGallery version, the folder is `com.mobilelegends.hwag`.
 5.  Click **"Use this folder"** at the bottom of the screen.
 

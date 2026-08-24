@@ -50,6 +50,7 @@ class HistoryParser {
       List<PlayerStats> playersList = [];
       int cursor = 0;
       int winnerTeamId = 0;
+      int loserTeamId = 0;
       int myTeamId = 0;
       List<Map<String, dynamic>> tempPlayers = [];
 
@@ -115,11 +116,9 @@ class HistoryParser {
             if (len > 2 && len < 35 && ns + 2 + len <= data.length) {
               try {
                 String n = utf8.decode(data.sublist(ns + 2, ns + 2 + len));
-                if (n.runes.every((r) => r >= 32) && !n.contains('/')) {
-                  name = n;
-                  cursor = ns + 2 + len;
-                  break;
-                }
+                name = n;
+                cursor = ns + 2 + len;
+                break;
               } catch (_) {}
             }
           }
@@ -156,7 +155,9 @@ class HistoryParser {
         }
 
         int teamId = f[22] ?? 0;
-        if ((f[18] ?? 0) == 1) winnerTeamId = teamId;
+        int pScore = f[18] ?? 0;
+        if (pScore == 1 || pScore == 7) winnerTeamId = teamId;
+        if (pScore == 5) loserTeamId = teamId;
         bool isMe = (userGameId != null && pId == userGameId.trim());
         if (isMe) myTeamId = teamId;
 
@@ -203,6 +204,17 @@ class HistoryParser {
           ),
         });
         cursor = fc;
+      }
+
+      // Infer winner from loser if needed
+      if (winnerTeamId == 0 && loserTeamId != 0) {
+        for (var p in tempPlayers) {
+          int tId = p['stats'].teamId;
+          if (tId != loserTeamId) {
+            winnerTeamId = tId;
+            break;
+          }
+        }
       }
 
       // Final Team Splitting

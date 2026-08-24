@@ -19,6 +19,10 @@ class DatabaseHelper {
     return _database!;
   }
 
+  Future<String> getDbPath() async {
+    return join(await getDatabasesPath(), 'game_stats.db');
+  }
+
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'game_stats.db');
     final db = await openDatabase(
@@ -223,36 +227,79 @@ class DatabaseHelper {
     updateNotifier.notifyListeners();
   }
 
-  Future<List<PlayerProfile>> getAllProfiles() async {
+  Future<List<PlayerProfile>> getAllProfiles({int limit = 50, int offset = 0, String sortBy = 'last_match'}) async {
     Database db = await database;
+    
+    String orderClause;
+    if (sortBy == 'alpha') {
+      orderClause = 'COALESCE(p.pinned_alias, p.main_nickname) ASC COLLATE NOCASE';
+    } else if (sortBy == 'games_count') {
+      orderClause = 'games_count DESC';
+    } else {
+      orderClause = 'last_match DESC, p.id DESC';
+    }
+
     final maps = await db.rawQuery('''
       SELECT p.id, p.main_nickname, p.is_user, p.pinned_alias, p.server_id,
-             MAX(COALESCE(g.end_date, g.date)) as last_match
+             MAX(COALESCE(g.end_date, g.date)) as last_match,
+             COUNT(gp.id) as games_count
       FROM player_profiles p
       LEFT JOIN game_players gp ON p.id = gp.profile_id
       LEFT JOIN games g ON gp.game_id = g.id
       WHERE (p.id IN (SELECT DISTINCT profile_id FROM player_nicknames) OR p.is_user = 1)
       GROUP BY p.id
-      ORDER BY last_match DESC, p.id DESC
-    ''');
+      ORDER BY p.is_user DESC, $orderClause
+      LIMIT ? OFFSET ?
+    ''', [limit, offset]);
     return maps.map((m) => PlayerProfile.fromMap(m)).toList();
   }
 
-  Future<List<PlayerProfile>> searchProfilesByAnyNickname(String query) async {
+  Future<PlayerProfile?> getProfileById(int id) async {
+    Database db = await database;
+    final maps = await db.rawQuery('''
+      SELECT 
+        p.*,
+        COUNT(gp.id) as total_games,
+        MAX(gp.game_id) as last_game_id
+      FROM player_profiles p
+      LEFT JOIN game_players gp ON p.id = gp.profile_id
+      WHERE p.id = ?
+      GROUP BY p.id
+    ''', [id]);
+    
+    if (maps.isNotEmpty) {
+      return PlayerProfile.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<List<PlayerProfile>> searchProfilesByAnyNickname(String query, {String sortBy = 'last_match'}) async {
     Database db = await database;
     final q = '%${query.toLowerCase()}%';
+    
+    String orderClause;
+    if (sortBy == 'alpha') {
+      orderClause = 'COALESCE(p.pinned_alias, p.main_nickname) ASC COLLATE NOCASE';
+    } else if (sortBy == 'games_count') {
+      orderClause = 'games_count DESC';
+    } else {
+      orderClause = 'last_match DESC, p.id DESC';
+    }
+
     final maps = await db.rawQuery(
       '''
       SELECT p.id, p.main_nickname, p.is_user, p.pinned_alias, p.server_id,
-             MAX(COALESCE(g.end_date, g.date)) as last_match
+             MAX(COALESCE(g.end_date, g.date)) as last_match,
+             COUNT(gp.id) as games_count
       FROM player_profiles p
       LEFT JOIN game_players gp ON p.id = gp.profile_id
       LEFT JOIN games g ON gp.game_id = g.id
-      WHERE p.id IN (SELECT profile_id FROM player_nicknames WHERE LOWER(nickname) LIKE ?) 
-         OR LOWER(p.main_nickname) LIKE ? OR LOWER(p.pinned_alias) LIKE ?
+      WHERE p.id IN (
+        SELECT DISTINCT profile_id FROM player_nicknames WHERE LOWER(nickname) LIKE ?
+      ) OR LOWER(p.main_nickname) LIKE ? OR LOWER(p.pinned_alias) LIKE ?
       GROUP BY p.id
-      ORDER BY last_match DESC, p.id DESC
-    ''',
+      ORDER BY p.is_user DESC, $orderClause
+      ''',
       [q, q, q],
     );
     return maps.map((m) => PlayerProfile.fromMap(m)).toList();
@@ -368,7 +415,7 @@ class DatabaseHelper {
         COUNT(CASE WHEN has_user.game_id IS NOT NULL AND gp.is_enemy = 1 THEN 1 END) as enemy_games,
         COUNT(CASE WHEN has_user.game_id IS NOT NULL AND gp.is_enemy = 1 AND g.result = 'DEFEAT' THEN 1 END) as enemy_wins,
         COUNT(CASE WHEN has_user.game_id IS NULL THEN 1 END) as standalone_games,
-        COUNT(CASE WHEN has_user.game_id IS NULL AND CAST(gp.score AS INTEGER) BETWEEN 1 AND 4 THEN 1 END) as standalone_wins
+        COUNT(CASE WHEN has_user.game_id IS NULL AND CAST(gp.score AS INTEGER) IN (1, 2, 3, 4, 6, 7) THEN 1 END) as standalone_wins
       FROM game_players gp
       JOIN games g ON gp.game_id = g.id
       LEFT JOIN (
@@ -554,12 +601,70 @@ class DatabaseHelper {
     }
   }
 
-  Future<List<GameStats>> getGames() async {
+  Future<int> getGamesCount({Map<String, dynamic>? filters}) async {
     Database db = await database;
-    final maps = await db.query(
-      'games',
-      orderBy: 'COALESCE(end_date, date) DESC',
-    );
+    String joins = '';
+    String where = '1=1';
+    List<dynamic> args = [];
+
+    if (filters != null) {
+      if (filters['result'] != null && filters['result'] != 'ALL') {
+        where += ' AND games.result = ?';
+        args.add(filters['result']);
+      }
+      if (filters['heroId'] != null || (filters['role'] != null && filters['role'] != 'ALL')) {
+        joins = 'JOIN game_players gp ON games.id = gp.game_id AND gp.is_user = 1';
+        if (filters['heroId'] != null) {
+          where += ' AND gp.hero = ?';
+          args.add(filters['heroId'].toString());
+        }
+        if (filters['role'] != null && filters['role'] != 'ALL') {
+          where += ' AND LOWER(gp.role) = ?';
+          args.add(filters['role'].toString().toLowerCase());
+        }
+      }
+    }
+
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM games $joins WHERE $where', args);
+    return int.tryParse(result.first['count'].toString()) ?? 0;
+  }
+
+  Future<List<GameStats>> getGames({int limit = 50, int offset = 0, Map<String, dynamic>? filters}) async {
+    Database db = await database;
+    String joins = '';
+    String where = '1=1';
+    List<dynamic> args = [];
+
+    if (filters != null) {
+      if (filters['result'] != null && filters['result'] != 'ALL') {
+        where += ' AND games.result = ?';
+        args.add(filters['result']);
+      }
+      if (filters['heroId'] != null || (filters['role'] != null && filters['role'] != 'ALL')) {
+        joins = 'JOIN game_players gp ON games.id = gp.game_id AND gp.is_user = 1';
+        if (filters['heroId'] != null) {
+          where += ' AND gp.hero = ?';
+          args.add(filters['heroId'].toString());
+        }
+        if (filters['role'] != null && filters['role'] != 'ALL') {
+          where += ' AND LOWER(gp.role) = ?';
+          args.add(filters['role'].toString().toLowerCase());
+        }
+      }
+    }
+
+    args.add(limit);
+    args.add(offset);
+
+    final maps = await db.rawQuery('''
+      SELECT games.* 
+      FROM games 
+      $joins 
+      WHERE $where 
+      ORDER BY COALESCE(games.end_date, games.date) DESC 
+      LIMIT ? OFFSET ?
+    ''', args);
+
     return maps.map((m) => GameStats.fromMap(m)).toList();
   }
 
@@ -638,17 +743,27 @@ class DatabaseHelper {
         int playerId = match['player_id'] as int;
         int newIsEnemy = match['is_enemy'] as int;
 
-        final mvpQuery = await txn.rawQuery(
-          'SELECT is_enemy FROM game_players WHERE game_id = ? AND score = 1 LIMIT 1',
+        final mvpWinQuery = await txn.rawQuery(
+          'SELECT is_enemy FROM game_players WHERE game_id = ? AND score IN (1, 7) LIMIT 1',
+          [gameId],
+        );
+
+        final mvpLossQuery = await txn.rawQuery(
+          'SELECT is_enemy FROM game_players WHERE game_id = ? AND score = 5 LIMIT 1',
           [gameId],
         );
 
         String newResult = 'DEFEAT';
         bool invertTeams = (newIsEnemy == 1);
 
-        if (mvpQuery.isNotEmpty) {
-          int mvpIsEnemy = mvpQuery.first['is_enemy'] as int;
+        if (mvpWinQuery.isNotEmpty) {
+          int mvpIsEnemy = mvpWinQuery.first['is_enemy'] as int;
           if (mvpIsEnemy == newIsEnemy) {
+            newResult = 'VICTORY';
+          }
+        } else if (mvpLossQuery.isNotEmpty) {
+          int mvpLossIsEnemy = mvpLossQuery.first['is_enemy'] as int;
+          if (mvpLossIsEnemy != newIsEnemy) {
             newResult = 'VICTORY';
           }
         } else {
@@ -717,5 +832,193 @@ class DatabaseHelper {
     });
 
     updateNotifier.notifyListeners();
+  }
+
+  Future<List<Map<String, dynamic>>> getTopUserHeroes() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        gp.hero as hero_id,
+        SUM(CASE WHEN gp.is_user = 1 THEN 1 ELSE 0 END) as my_games,
+        SUM(CASE WHEN gp.is_user = 1 AND ((gp.is_enemy = 0 AND g.result = 'VICTORY') OR (gp.is_enemy = 1 AND g.result = 'DEFEAT')) THEN 1 ELSE 0 END) as my_wins,
+        COUNT(gp.id) as total_games,
+        SUM(CASE WHEN (gp.is_enemy = 0 AND g.result = 'VICTORY') OR (gp.is_enemy = 1 AND g.result = 'DEFEAT') THEN 1 ELSE 0 END) as total_wins
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
+      WHERE gp.hero != '0' AND gp.hero != ''
+      GROUP BY gp.hero
+      ORDER BY total_games DESC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getRoleStats() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        gp.role,
+        SUM(CASE WHEN gp.is_user = 1 THEN 1 ELSE 0 END) as my_games,
+        SUM(CASE WHEN gp.is_user = 1 AND ((gp.is_enemy = 0 AND g.result = 'VICTORY') OR (gp.is_enemy = 1 AND g.result = 'DEFEAT')) THEN 1 ELSE 0 END) as my_wins
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
+      WHERE gp.is_user = 1 AND gp.role != 'unknown' AND gp.role != '' AND gp.role IS NOT NULL
+      GROUP BY gp.role
+      ORDER BY my_games DESC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getTeammatesStats() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        pp.id as profile_id,
+        COALESCE(pp.pinned_alias, pp.main_nickname) as name,
+        COUNT(gp.id) as games_count,
+        SUM(CASE WHEN g.result = 'VICTORY' THEN 1 ELSE 0 END) as wins
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
+      JOIN player_profiles pp ON gp.profile_id = pp.id
+      WHERE gp.is_enemy = 0 AND gp.is_user = 0
+      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1)
+      GROUP BY gp.profile_id
+      HAVING games_count > 0
+      ORDER BY games_count DESC, wins DESC
+      LIMIT 100
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getEnemiesStats() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT 
+        gp.hero as hero_id,
+        COUNT(gp.id) as games_count,
+        SUM(CASE WHEN g.result = 'VICTORY' THEN 1 ELSE 0 END) as wins
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
+      WHERE gp.is_enemy = 1 AND gp.hero != '0' AND gp.hero != ''
+      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1)
+      GROUP BY gp.hero
+      ORDER BY games_count DESC, wins DESC
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getGamesAndStatsForHeroCategory(int heroId, int categoryIndex) async {
+    String condition = '';
+    if (categoryIndex == 0) condition = 'AND gp.is_user = 1';
+    else if (categoryIndex == 1) condition = 'AND gp.is_enemy = 0';
+    else if (categoryIndex == 2) condition = 'AND gp.is_enemy = 0 AND gp.is_user = 0';
+    else if (categoryIndex == 3) condition = 'AND gp.is_enemy = 1';
+    
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT g.*, gp.kda as hero_kda, gp.gold as hero_gold, gp.items as hero_items, 
+             gp.score as hero_score, gp.role as hero_role, gp.spell as hero_spell,
+             gp.is_enemy as hero_is_enemy, gp.is_user as hero_is_user,
+             gp.damage_hero as hero_damage_hero, gp.damage_tower as hero_damage_tower,
+             gp.damage_taken as hero_damage_taken, gp.heal as hero_heal,
+             gp.cc_duration as hero_cc_duration, gp.kill_streak as hero_kill_streak,
+             gp.level as hero_level, COALESCE(pp.pinned_alias, gp.nickname) as hero_player_nickname
+      FROM games g
+      JOIN game_players gp ON g.id = gp.game_id
+      LEFT JOIN player_profiles pp ON gp.profile_id = pp.id
+      WHERE gp.hero = ? $condition
+      ORDER BY COALESCE(g.end_date, g.date) DESC
+    ''', [heroId.toString()]);
+  }
+
+  Future<List<Map<String, dynamic>>> getDistinctHeroesWithGames() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT hero, GROUP_CONCAT(game_id) as games
+      FROM game_players 
+      WHERE hero != '0' AND hero != ''
+      GROUP BY hero
+    ''');
+  }
+
+  Future<List<Map<String, dynamic>>> getDistinctItemsWithGames() async {
+    Database db = await database;
+    return await db.rawQuery('''
+      SELECT items, GROUP_CONCAT(game_id) as games
+      FROM game_players 
+      WHERE items != '' AND items != '0'
+      GROUP BY items
+    ''');
+  }
+
+  Future<int> deleteBrokenGames() async {
+    Database db = await database;
+    
+    // Find broken games: not 10 players or max score is 0
+    final brokenGames = await db.rawQuery('''
+      SELECT id FROM games 
+      WHERE (
+        SELECT COUNT(*) FROM game_players WHERE game_id = games.id
+      ) != 10 
+      OR (
+        SELECT MAX(CAST(score AS INTEGER)) FROM game_players WHERE game_id = games.id
+      ) = 0
+    ''');
+    
+    if (brokenGames.isEmpty) return 0;
+    
+    int count = 0;
+    await db.transaction((txn) async {
+      for (var row in brokenGames) {
+        int gameId = row['id'] as int;
+        await txn.delete('game_players', where: 'game_id = ?', whereArgs: [gameId]);
+        await txn.delete('games', where: 'id = ?', whereArgs: [gameId]);
+        count++;
+      }
+    });
+    
+    updateNotifier.notifyListeners();
+    return count;
+  }
+
+  Future<int> recalculateAllWinners() async {
+    Database db = await database;
+    int updatedCount = 0;
+
+    await db.transaction((txn) async {
+      final games = await txn.query('games', columns: ['id', 'result']);
+      for (var game in games) {
+        int gameId = game['id'] as int;
+        String currentResult = game['result'] as String;
+
+        final mvpWinQuery = await txn.rawQuery(
+          'SELECT is_enemy FROM game_players WHERE game_id = ? AND score IN (1, 7) LIMIT 1',
+          [gameId],
+        );
+        final mvpLossQuery = await txn.rawQuery(
+          'SELECT is_enemy FROM game_players WHERE game_id = ? AND score = 5 LIMIT 1',
+          [gameId],
+        );
+
+        String newResult = currentResult;
+        if (mvpWinQuery.isNotEmpty) {
+          int isEnemy = mvpWinQuery.first['is_enemy'] as int;
+          newResult = isEnemy == 0 ? 'VICTORY' : 'DEFEAT';
+        } else if (mvpLossQuery.isNotEmpty) {
+          int isEnemy = mvpLossQuery.first['is_enemy'] as int;
+          newResult = isEnemy == 1 ? 'VICTORY' : 'DEFEAT';
+        }
+
+        if (newResult != currentResult) {
+          await txn.update(
+            'games',
+            {'result': newResult},
+            where: 'id = ?',
+            whereArgs: [gameId],
+          );
+          updatedCount++;
+        }
+      }
+    });
+
+    if (updatedCount > 0) {
+      updateNotifier.notifyListeners();
+    }
+    return updatedCount;
   }
 }

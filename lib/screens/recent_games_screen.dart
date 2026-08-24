@@ -11,7 +11,9 @@ import '../utils/data_utils.dart';
 import 'history_folder_screen.dart';
 
 class RecentGamesScreen extends StatefulWidget {
-  const RecentGamesScreen({super.key});
+  final Map<String, dynamic>? initialFilters;
+
+  const RecentGamesScreen({super.key, this.initialFilters});
 
   @override
   State<RecentGamesScreen> createState() => _RecentGamesScreenState();
@@ -21,13 +23,20 @@ class _RecentGamesScreenState extends State<RecentGamesScreen>
     with WidgetsBindingObserver {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<GameStats> _games = [];
+  final ScrollController _scrollController = ScrollController();
   bool _isDeveloperMode = false;
   bool _autoImportEnabled = false;
   bool _isImporting = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _totalGamesCount = 0;
+  static const int _limit = 20;
+  late Map<String, dynamic> _filters;
 
   @override
   void initState() {
     super.initState();
+    _filters = widget.initialFilters ?? {'result': 'ALL', 'role': 'ALL', 'heroId': null};
     WidgetsBinding.instance.addObserver(this);
     _loadData().then((_) {
       if (_autoImportEnabled && !_isImporting) {
@@ -35,12 +44,21 @@ class _RecentGamesScreenState extends State<RecentGamesScreen>
       }
     });
     _dbHelper.updateNotifier.addListener(_loadData);
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 && !_isLoadingMore && _hasMore) {
+      _loadMore();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _dbHelper.updateNotifier.removeListener(_loadData);
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -57,15 +75,97 @@ class _RecentGamesScreenState extends State<RecentGamesScreen>
     final prefs = await SharedPreferences.getInstance();
     final isDev = prefs.getBool('isDeveloperMode') ?? false;
     final auto = prefs.getBool('auto_import') ?? false;
-    final games = await _dbHelper.getGames();
+    final total = await _dbHelper.getGamesCount(filters: _filters);
+    final games = await _dbHelper.getGames(limit: _limit, offset: 0, filters: _filters);
 
     if (mounted) {
       setState(() {
         _isDeveloperMode = isDev;
         _autoImportEnabled = auto;
+        _totalGamesCount = total;
         _games = games;
+        _hasMore = games.length == _limit;
       });
     }
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _isLoadingMore = true);
+    final moreGames = await _dbHelper.getGames(limit: _limit, offset: _games.length, filters: _filters);
+    if (mounted) {
+      setState(() {
+        _games.addAll(moreGames);
+        _isLoadingMore = false;
+        _hasMore = moreGames.length == _limit;
+      });
+    }
+  }
+
+  void _showFilterOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Фильтры', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    const Text('Результат матча'),
+                    DropdownButton<String>(
+                      value: _filters['result'],
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('Все')),
+                        DropdownMenuItem(value: 'VICTORY', child: Text('Победа')),
+                        DropdownMenuItem(value: 'DEFEAT', child: Text('Поражение')),
+                      ],
+                      onChanged: (val) {
+                        setModalState(() => _filters['result'] = val);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Линия'),
+                    DropdownButton<String>(
+                      value: _filters['role'],
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('Все')),
+                        DropdownMenuItem(value: 'exp', child: Text('Опыт')),
+                        DropdownMenuItem(value: 'mid', child: Text('Мид')),
+                        DropdownMenuItem(value: 'roam', child: Text('Роум')),
+                        DropdownMenuItem(value: 'jungle', child: Text('Лес')),
+                        DropdownMenuItem(value: 'gold', child: Text('Золото')),
+                      ],
+                      onChanged: (val) {
+                        setModalState(() => _filters['role'] = val);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          setState(() {});
+                          _loadData();
+                        },
+                        child: const Text('Применить'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _runAutoImport() async {
@@ -175,8 +275,15 @@ class _RecentGamesScreenState extends State<RecentGamesScreen>
       );
     } else {
       content = ListView.builder(
-        itemCount: _games.length,
+        controller: _scrollController,
+        itemCount: _games.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (index == _games.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
           final game = _games[index];
           final isVictory = game.result == 'VICTORY';
           final resultText = isVictory
@@ -319,6 +426,19 @@ class _RecentGamesScreenState extends State<RecentGamesScreen>
     }
 
     return Scaffold(
+      appBar: AppBar(
+        title: Text('Всего игр: $_totalGamesCount'),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.filter_list,
+              color: (_filters['result'] != 'ALL' || _filters['role'] != 'ALL') ? Colors.cyanAccent : Colors.white,
+            ),
+            onPressed: _showFilterOptions,
+          ),
+        ],
+      ),
       body: content,
       floatingActionButton: _autoImportEnabled
           ? null

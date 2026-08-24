@@ -1,13 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../main.dart';
 import '../utils/app_strings.dart';
 import '../utils/database_helper.dart';
 import 'asset_gallery_screen.dart';
 import 'history_folder_screen.dart';
+import 'asset_errors_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -138,6 +142,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     appLocaleNotifier.value = Locale(newLang);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('language_code', newLang);
+  }
+
+  Future<void> _exportGamesToCSV() async {
+    try {
+      final games = await _dbHelper.getGames(limit: 100000, offset: 0);
+      if (games.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Нет игр для экспорта')));
+        }
+        return;
+      }
+      
+      String csv = 'ID,Match_ID,Result,Hero_ID,KDA,Score,Role,Spell,Date,Duration\n';
+      for (var g in games) {
+        csv += '${g.id},${g.matchId},${g.result},${g.heroId},${g.kda},${g.score},${g.role},${g.spellId},${g.date},${g.duration}\n';
+      }
+      
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/mlbb_games.csv';
+      final file = File(path);
+      await file.writeAsString(csv);
+      
+      if (mounted) {
+        final box = context.findRenderObject() as RenderBox?;
+        await Share.shareXFiles(
+          [XFile(path)],
+          text: 'Мои игры MLBB',
+          sharePositionOrigin: box != null ? (box.localToGlobal(Offset.zero) & box.size) : null,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    }
   }
 
   @override
@@ -271,6 +310,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   builder: (context) => const AssetGalleryScreen(),
                 ),
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: const Text('Ошибки в ассетах'),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AssetErrorsScreen(),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+              title: const Text('Удалить битые игры (не 5x5 / без очков)'),
+              onTap: () async {
+                final count = await _dbHelper.deleteBrokenGames();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Удалено битых игр: $count')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sync_alt, color: Colors.blueAccent),
+              title: const Text('Переопределить победителей'),
+              onTap: () async {
+                final count = await _dbHelper.recalculateAllWinners();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Переопределено результатов: $count')),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.download_for_offline, color: Colors.green),
+              title: const Text('Скачать базу данных'),
+              onTap: () async {
+                try {
+                  final dbPath = await _dbHelper.getDbPath();
+                  if (File(dbPath).existsSync()) {
+                    await Share.shareXFiles([XFile(dbPath)], text: 'MLBB Analyst Database');
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Файл БД не найден!')),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ошибка: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Экспорт игр в CSV'),
+              onTap: _exportGamesToCSV,
             ),
           ],
 

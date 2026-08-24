@@ -121,7 +121,7 @@ class DataUtils {
     }
   }
 
-  static Widget getSpellIcon(int spellId, {double size = 30}) {
+  static Widget getSpellIcon(int spellId, {int? blessingId, double size = 30}) {
     if (spellId == 0) {
       return Container(
         width: size,
@@ -138,14 +138,13 @@ class DataUtils {
     final entity = GameData.getSpell(spellId);
     final String assetName = entity?.assetName ?? 'unknown';
 
-    return ClipOval(
+    Widget baseIcon = ClipOval(
       child: Image.asset(
         'assets/spells/$assetName.png',
         width: size,
         height: size,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
-          // Try blessings folder
           return Image.asset(
             'assets/blessings/$assetName.png',
             width: size,
@@ -166,6 +165,39 @@ class DataUtils {
         },
       ),
     );
+
+    if (blessingId != null) {
+      final blessingEntity = GameData.getSpell(blessingId);
+      if (blessingEntity != null) {
+        return Stack(
+          children: [
+            baseIcon,
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: size * 0.5,
+                height: size * 0.5,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 0.2),
+                  color: Colors.black54,
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/blessings/${blessingEntity.assetName}.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (c, e, s) => const Icon(Icons.star, size: 8, color: Colors.amber),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    return baseIcon;
   }
 
   static String getLocalizedItemName(int itemId, BuildContext context) {
@@ -275,9 +307,9 @@ class DataUtils {
 
     int medalId = score;
     String assetName = '';
-    if (medalId == 1)
+    if (medalId == 1 || medalId == 5 || medalId == 7)
       assetName = 'mvp';
-    else if (medalId == 2)
+    else if (medalId == 2 || medalId == 6)
       assetName = 'gold_medal';
     else if (medalId == 3)
       assetName = 'silver_medal';

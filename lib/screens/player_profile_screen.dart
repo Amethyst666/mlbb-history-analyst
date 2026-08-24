@@ -23,7 +23,9 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   bool _isLoading = true;
 
   int _totalAllyGames = 0;
+  int _totalAllyWins = 0;
   int _totalEnemyGames = 0;
+  int _totalEnemyWins = 0;
   int _totalStandaloneGames = 0;
 
   @override
@@ -46,11 +48,15 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
     );
 
     int ally = 0;
+    int allyW = 0;
     int enemy = 0;
+    int enemyW = 0;
     int standalone = 0;
     for (var s in stats) {
       ally += (s['ally_games'] as num).toInt();
+      allyW += (s['ally_wins'] as num).toInt();
       enemy += (s['enemy_games'] as num).toInt();
+      enemyW += (s['enemy_wins'] as num).toInt();
       standalone += (s['standalone_games'] as num).toInt();
     }
 
@@ -62,7 +68,9 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
         _heroStats = stats;
         _playerGames = games;
         _totalAllyGames = ally;
+        _totalAllyWins = allyW;
         _totalEnemyGames = enemy;
+        _totalEnemyWins = enemyW;
         _totalStandaloneGames = standalone;
         _isLoading = false;
       });
@@ -171,12 +179,14 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                   AppStrings.get(context, 'with_me'),
                   _totalAllyGames,
                   Colors.blueAccent,
+                  winRate: _totalAllyGames > 0 ? (_totalAllyWins / _totalAllyGames * 100) : null,
                 ),
                 const SizedBox(width: 10),
                 _buildStatBadge(
                   AppStrings.get(context, 'against_me'),
                   _totalEnemyGames,
                   Colors.redAccent,
+                  winRate: _totalEnemyGames > 0 ? (_totalEnemyWins / _totalEnemyGames * 100) : null,
                 ),
                 const SizedBox(width: 10),
                 _buildStatBadge(
@@ -186,13 +196,30 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 ),
               ],
             ),
+          ] else ...[
+            const SizedBox(height: 15),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildStatBadge(
+                  'Всего игр',
+                  _totalAllyGames,
+                  Colors.cyanAccent,
+                  winRate: _totalAllyGames > 0 ? (_totalAllyWins / _totalAllyGames * 100) : null,
+                ),
+              ],
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildStatBadge(String label, int count, Color color) {
+  Widget _buildStatBadge(String label, int count, Color color, {double? winRate}) {
+    String text = count.toString();
+    if (winRate != null) {
+      text += ' (${winRate.toStringAsFixed(1)}%)';
+    }
     return Column(
       children: [
         Text(
@@ -212,7 +239,7 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
             border: Border.all(color: color.withOpacity(0.3)),
           ),
           child: Text(
-            count.toString(),
+            text,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.bold,

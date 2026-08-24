@@ -248,6 +248,9 @@ class GameData {
     GameEntity(id: 129, assetName: 'zetian', en: 'Zetian', ru: 'Дзетянь'),
     GameEntity(id: 130, assetName: 'obsidia', en: 'Obsidia', ru: 'Обсидия'),
     GameEntity(id: 131, assetName: 'sora', en: 'Sora', ru: 'Сора'),
+    // 2026
+    GameEntity(id: 132, assetName: 'marcel', en: 'Marcel', ru: 'Марсель'),
+    GameEntity(id: 133, assetName: 'hirara', en: 'Hirara', ru: 'Хирара'),
   ];
 
   // === BLESSINGS (Boot Modifiers) - Needed for UI/Icons ===
