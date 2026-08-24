@@ -1,1 +1,0 @@
-{"status":"error","code":"VALIDATION_ERROR","message":"Validation failed.","timestamp":"2026-06-24T01:02:03.913660Z","support":{"livechat":"https://ridwaanhall.com/guestbook/","contact":"https://ridwaanhall.com/contact/"},"details":[{"type":"missing","loc":["query","sid"],"msg":"Field required","input":null}]}
