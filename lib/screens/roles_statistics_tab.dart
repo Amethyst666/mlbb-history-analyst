@@ -20,6 +20,13 @@ class _RolesStatisticsTabState extends State<RolesStatisticsTab> {
   void initState() {
     super.initState();
     _loadData();
+    _dbHelper.updateNotifier.addListener(_loadData);
+  }
+
+  @override
+  void dispose() {
+    _dbHelper.updateNotifier.removeListener(_loadData);
+    super.dispose();
   }
 
   Future<void> _loadData() async {

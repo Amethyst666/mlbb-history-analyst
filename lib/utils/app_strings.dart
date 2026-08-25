@@ -187,6 +187,8 @@ class AppStrings {
           'Failed to connect to Shizuku. Ensure the service is running.',
       'auto_import_title': 'Auto-import Matches',
       'auto_import_desc': 'Automatically search for new games on app resume',
+      'stats_only_solo_title': 'Solo Games Only',
+      'stats_only_solo_desc': 'Filter all statistics in the Info section by solo matches',
     },
     'ru': {
       'app_title': 'Аналитик MLBB',
@@ -376,6 +378,9 @@ class AppStrings {
       'auto_import_title': 'Авто-импорт матчей',
       'auto_import_desc':
           'Автоматически искать новые игры при входе в приложение',
+      'stats_only_solo_title': 'Только соло-игры',
+      'stats_only_solo_desc':
+          'Фильтровать всю статистику в разделе «Инфо» по соло-играм',
     },
   };
 

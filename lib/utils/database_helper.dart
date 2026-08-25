@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/game_stats.dart';
 import '../models/player_stats.dart';
 import '../models/player_profile.dart';
@@ -842,8 +843,26 @@ class DatabaseHelper {
     updateNotifier.notifyListeners();
   }
 
+  Future<String> _getSoloConditionClause() async {
+    final prefs = await SharedPreferences.getInstance();
+    final onlySolo = prefs.getBool('stats_only_solo') ?? false;
+    if (!onlySolo) return '';
+    return '''
+      AND g.id IN (
+        SELECT g2.id
+        FROM games g2
+        JOIN game_players u2 ON g2.id = u2.game_id AND u2.is_user = 1
+        WHERE (
+          SELECT COUNT(*) FROM game_players p2 
+          WHERE p2.game_id = g2.id AND p2.is_enemy = 0 AND p2.party_id = u2.party_id AND p2.party_id != 0
+        ) <= 1
+      )
+    ''';
+  }
+
   Future<List<Map<String, dynamic>>> getTopUserHeroes() async {
     Database db = await database;
+    final soloClause = await _getSoloConditionClause();
     return await db.rawQuery('''
       SELECT 
         gp.hero as hero_id,
@@ -853,7 +872,7 @@ class DatabaseHelper {
         SUM(CASE WHEN (gp.is_enemy = 0 AND g.result = 'VICTORY') OR (gp.is_enemy = 1 AND g.result = 'DEFEAT') THEN 1 ELSE 0 END) as total_wins
       FROM game_players gp
       JOIN games g ON gp.game_id = g.id
-      WHERE gp.hero != '0' AND gp.hero != ''
+      WHERE gp.hero != '0' AND gp.hero != '' $soloClause
       GROUP BY gp.hero
       ORDER BY total_games DESC
     ''');
@@ -861,6 +880,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getRoleStats() async {
     Database db = await database;
+    final soloClause = await _getSoloConditionClause();
     return await db.rawQuery('''
       SELECT 
         gp.role,
@@ -868,7 +888,7 @@ class DatabaseHelper {
         SUM(CASE WHEN gp.is_user = 1 AND ((gp.is_enemy = 0 AND g.result = 'VICTORY') OR (gp.is_enemy = 1 AND g.result = 'DEFEAT')) THEN 1 ELSE 0 END) as my_wins
       FROM game_players gp
       JOIN games g ON gp.game_id = g.id
-      WHERE gp.is_user = 1 AND gp.role != 'unknown' AND gp.role != '' AND gp.role IS NOT NULL
+      WHERE gp.is_user = 1 AND gp.role != 'unknown' AND gp.role != '' AND gp.role IS NOT NULL $soloClause
       GROUP BY gp.role
       ORDER BY my_games DESC
     ''');
@@ -876,6 +896,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getTeammatesStats() async {
     Database db = await database;
+    final soloClause = await _getSoloConditionClause();
     return await db.rawQuery('''
       SELECT 
         pp.id as profile_id,
@@ -886,7 +907,7 @@ class DatabaseHelper {
       JOIN games g ON gp.game_id = g.id
       JOIN player_profiles pp ON gp.profile_id = pp.id
       WHERE gp.is_enemy = 0 AND gp.is_user = 0
-      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1)
+      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1) $soloClause
       GROUP BY gp.profile_id
       HAVING games_count > 0
       ORDER BY games_count DESC, wins DESC
@@ -896,6 +917,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getEnemiesStats() async {
     Database db = await database;
+    final soloClause = await _getSoloConditionClause();
     return await db.rawQuery('''
       SELECT 
         gp.hero as hero_id,
@@ -904,7 +926,7 @@ class DatabaseHelper {
       FROM game_players gp
       JOIN games g ON gp.game_id = g.id
       WHERE gp.is_enemy = 1 AND gp.hero != '0' AND gp.hero != ''
-      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1)
+      AND g.id IN (SELECT game_id FROM game_players WHERE is_user = 1) $soloClause
       GROUP BY gp.hero
       ORDER BY games_count DESC, wins DESC
     ''');
@@ -918,6 +940,7 @@ class DatabaseHelper {
     else if (categoryIndex == 3) condition = 'AND gp.is_enemy = 1';
     
     Database db = await database;
+    final soloClause = await _getSoloConditionClause();
     return await db.rawQuery('''
       SELECT g.*, gp.kda as hero_kda, gp.gold as hero_gold, gp.items as hero_items, 
              gp.score as hero_score, gp.role as hero_role, gp.spell as hero_spell,
@@ -929,7 +952,7 @@ class DatabaseHelper {
       FROM games g
       JOIN game_players gp ON g.id = gp.game_id
       LEFT JOIN player_profiles pp ON gp.profile_id = pp.id
-      WHERE gp.hero = ? $condition
+      WHERE gp.hero = ? $condition $soloClause
       ORDER BY COALESCE(g.end_date, g.date) DESC
     ''', [heroId.toString()]);
   }

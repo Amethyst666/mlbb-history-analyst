@@ -29,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isDeveloperMode = false;
   bool _autoImport = false;
+  bool _statsOnlySolo = false;
   String _accessMode = 'none';
   String? _safUri;
   String _appVersion = '2.3.2';
@@ -54,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final mode = prefs.getString('history_mode') ?? 'none';
     final uri = prefs.getString('history_saf_uri');
     final auto = prefs.getBool('auto_import') ?? false;
+    final soloOnly = prefs.getBool('stats_only_solo') ?? false;
     final customPath = prefs.getString('shizuku_custom_path') ?? '';
 
     final packageInfo = await PackageInfo.fromPlatform();
@@ -61,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _isDeveloperMode = prefs.getBool('isDeveloperMode') ?? false;
       _autoImport = auto;
+      _statsOnlySolo = soloOnly;
       _nickController.text = userId;
       _customShizukuPathController.text = customPath;
       _accessMode = mode;
@@ -77,6 +80,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_import', value);
     setState(() => _autoImport = value);
+    _dbHelper.updateNotifier.notifyListeners();
+  }
+
+  Future<void> _toggleStatsOnlySolo(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('stats_only_solo', value);
+    setState(() => _statsOnlySolo = value);
     _dbHelper.updateNotifier.notifyListeners();
   }
 
@@ -213,6 +223,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(AppStrings.get(context, 'auto_import_desc')),
             value: _autoImport,
             onChanged: _toggleAutoImport,
+            activeColor: Colors.cyanAccent,
+          ),
+
+          SwitchListTile(
+            secondary: const Icon(Icons.person_outline, color: Colors.cyanAccent),
+            title: Text(AppStrings.get(context, 'stats_only_solo_title')),
+            subtitle: Text(AppStrings.get(context, 'stats_only_solo_desc')),
+            value: _statsOnlySolo,
+            onChanged: _toggleStatsOnlySolo,
             activeColor: Colors.cyanAccent,
           ),
 
