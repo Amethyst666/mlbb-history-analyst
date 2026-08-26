@@ -1,18 +1,24 @@
 # MLBB Analyst
 
+**English Version** | [Читать на русском](README_RU.md)
+
 Advanced Mobile Legends: Bang Bang match history analyzer and statistics tracker.
+
+> [!WARNING]
+> **Game Updates Notice:**
+> After Mobile Legends game patches and updates, the binary structure of `FightHistory` files may change. As a result, temporary errors or inaccuracies in parsing/detecting match stats, heroes, items, or ratings may occur until a parser update is released.
 
 ## Features
 
 - **Match History Parsing:** Reads binary match files (`FightHistory`) directly from game directories. Supports 5v5 (Classic & Ranked) modes and automatically ignores non-5v5 modes.
 - **Detailed Statistics:** Calculates KDA, Gold, Damage (Dealt, Taken, Tower/Push), Healing, and CC Duration per match.
-- **Lane & Role Breakdown:** Categorized by Lanes (EXP, Mid, Roam, Jungle, Gold) with localized names and pie chart breakdown.
-- **Global Server Stats:** Displays server winrate, pickrate, and banrate alongside personal performance.
+- **Lane & Role Breakdown:** Categorized by Lanes (EXP, Mid, Roam, Jungle, Gold) with localized names, charts, and detailed analytics.
 - **Teammates & Player Profiles:** Track teammate synergy, wins, losses, alias management, and custom notes.
+- **Solo Games Filter:** Toggle in settings to filter all Info section statistics by solo matches.
 - **Database Maintenance:** One-tap cleanup of broken or non-5v5 matches.
 - **Asset Gallery:** View heroes, items, and spells data.
 - **Multi-Language Support:** English and Russian localization.
-- **Dark Mode:** Modern UI.
+- **Dark Mode:** Modern UI design.
 
 ## Installation & Setup
 
@@ -21,31 +27,31 @@ Advanced Mobile Legends: Bang Bang match history analyzer and statistics tracker
 Due to Android's Scoped Storage restrictions, accessing the `Android/data` folder requires specific permissions. This app supports two methods:
 
 #### 1. SAF (Storage Access Framework) - Recommended
-This is the official Android method, but it requires manual folder selection.
+This is the official Android method, requiring manual folder selection once.
 
-1.  Go to **Settings** -> **File Access Method**.
-2.  Select **SAF (System Picker)**.
-3.  Click **Select SAF Folder**.
-4.  Navigate to `Android > data > com.mobile.legends > files > dragon2017 > FightHistory`.
-    *   For AppGallery version, the folder is `com.mobilelegends.hwag`.
-5.  Click **"Use this folder"** at the bottom of the screen.
+1. Go to **Settings** -> **File Access Method**.
+2. Select **SAF (System Picker)**.
+3. Click **Setup SAF Access**.
+4. Navigate to `Android > data > com.mobile.legends > files > dragon2017 > FightHistory`.
+   * *For AppGallery version, the folder is `com.mobilelegends.hwag`*.
+5. Click **"Use this folder"** at the bottom of the screen and confirm.
 
 *Note: On some devices (e.g., Xiaomi, Samsung Android 13/14), the system picker might restrict selection of the `Android/data` folder. In this case, use the Shizuku method.*
 
 #### 2. Shizuku (Advanced)
 This method uses ADB permissions to access files directly, bypassing system picker restrictions.
 
-1.  Install the **Shizuku** app from the Play Store or GitHub.
-2.  Start Shizuku (via Wireless Debugging or Root).
-3.  In **MLBB Analyst**, go to **Settings**.
-4.  Select **Shizuku (ADB)** as the access method.
-5.  Click **Request Shizuku Access** and allow permission in the Shizuku dialog.
+1. Install the **Shizuku** app from the Play Store or GitHub.
+2. Start Shizuku (via Wireless Debugging or Root).
+3. In **MLBB Analyst**, go to **Settings**.
+4. Select **Shizuku (ADB)** as the access method.
+5. Click **Check Shizuku Status** and allow permission in the dialog.
 
 ## Usage
 
-1.  Open the app.
-2.  Tap the **+** button on the main screen to import recent 5v5 matches.
-3.  View match details, hero statistics, lane performance, and teammate profiles.
+1. Open the app.
+2. Tap the **+** button (or enable Auto-import in settings) to import recent 5v5 matches.
+3. View match details, hero statistics, lane performance, and teammate profiles.
 
 ## Development
 
@@ -57,13 +63,11 @@ flutter run
 ```
 
 ### Dependencies
-- `sqflite`: Local database storage.
+- `sqflite`: Local SQLite database storage.
+- `shared_preferences`: User settings persistence.
 - `permission_handler`: Permission management.
 - `file_picker`: File selection.
-- `http`: Fetching global server statistics.
-- `shared_preferences`: User settings persistence.
 
 ## License
 
 MIT
-
