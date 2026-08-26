@@ -767,7 +767,7 @@ class GameData {
     ),
     GameEntity(
       id: 2484,
-      assetName: 'magic_necklace',
+      assetName: 'healing_necklace',
       en: 'Healing Necklace',
       ru: 'Ожерелье Исцеления',
       category: 'defense',
