@@ -77,34 +77,41 @@ class DataUtils {
     );
   }
 
-  static Widget getRoleIcon(String role, {double size = 12}) {
-    if (role == 'unknown') return const SizedBox.shrink();
+  static Widget getRoleIcon(String role, {double size = 12, Color? color}) {
+    final cleanRole = role.toLowerCase().trim();
+    if (cleanRole == 'unknown' || cleanRole.isEmpty) return const SizedBox.shrink();
+
+    String assetRole = cleanRole;
+    if (cleanRole == 'middle') assetRole = 'mid';
+    if (cleanRole == 'jungler') assetRole = 'jungle';
+    if (cleanRole == 'roamer') assetRole = 'roam';
 
     return Image.asset(
-      'assets/roles/$role.png',
+      'assets/roles/$assetRole.png',
       width: size,
       height: size,
       fit: BoxFit.contain,
+      color: color,
       errorBuilder: (context, error, stackTrace) {
         IconData icon = Icons.help_outline;
-        Color color = Colors.grey;
-        if (role == 'jungle') {
+        Color iconColor = Colors.grey;
+        if (assetRole == 'jungle') {
           icon = Icons.forest;
-          color = Colors.green;
-        } else if (role == 'roam') {
+          iconColor = Colors.purple;
+        } else if (assetRole == 'roam') {
           icon = Icons.flag;
-          color = Colors.blue;
-        } else if (role == 'gold') {
+          iconColor = Colors.green;
+        } else if (assetRole == 'gold') {
           icon = Icons.monetization_on;
-          color = Colors.amber;
-        } else if (role == 'mid') {
+          iconColor = Colors.amber;
+        } else if (assetRole == 'mid') {
           icon = Icons.flash_on;
-          color = Colors.purpleAccent;
-        } else if (role == 'exp') {
+          iconColor = Colors.blue;
+        } else if (assetRole == 'exp') {
           icon = Icons.shield;
-          color = Colors.brown;
+          iconColor = Colors.orange;
         }
-        return Icon(icon, size: size, color: color);
+        return Icon(icon, size: size, color: color ?? iconColor);
       },
     );
   }
