@@ -957,23 +957,12 @@ class DatabaseHelper {
     ''', [heroId.toString()]);
   }
 
-  Future<List<Map<String, dynamic>>> getDistinctHeroesWithGames() async {
+  Future<List<Map<String, dynamic>>> getAllPlayerHeroesAndItems() async {
     Database db = await database;
     return await db.rawQuery('''
-      SELECT hero, GROUP_CONCAT(game_id) as games
-      FROM game_players 
-      WHERE hero != '0' AND hero != ''
-      GROUP BY hero
-    ''');
-  }
-
-  Future<List<Map<String, dynamic>>> getDistinctItemsWithGames() async {
-    Database db = await database;
-    return await db.rawQuery('''
-      SELECT items, GROUP_CONCAT(game_id) as games
-      FROM game_players 
-      WHERE items != '' AND items != '0'
-      GROUP BY items
+      SELECT g.match_id, gp.hero, gp.nickname, gp.items
+      FROM game_players gp
+      JOIN games g ON gp.game_id = g.id
     ''');
   }
 

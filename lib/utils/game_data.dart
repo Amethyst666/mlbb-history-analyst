@@ -765,6 +765,14 @@ class GameData {
       category: 'defense',
       tier: 1,
     ),
+    GameEntity(
+      id: 2484,
+      assetName: 'magic_necklace',
+      en: 'Healing Necklace',
+      ru: 'Ожерелье Исцеления',
+      category: 'defense',
+      tier: 1,
+    ),
 
     GameEntity(
       id: 4505,
@@ -1026,6 +1034,24 @@ class GameData {
     GameEntity(
       id: 3047,
       assetName: 'boots',
+      en: 'Boots (Conceal)',
+      ru: 'Сапоги (Маскировка)',
+      category: 'movement',
+      blessingId: 20004,
+      tier: 1,
+    ),
+    GameEntity(
+      id: 3048,
+      assetName: 'boots',
+      en: 'Boots (Encourage)',
+      ru: 'Сапоги (Поощрение)',
+      category: 'movement',
+      blessingId: 20005,
+      tier: 1,
+    ),
+    GameEntity(
+      id: 3049,
+      assetName: 'boots',
       en: 'Boots (Favor)',
       ru: 'Сапоги (Благосклонность)',
       category: 'movement',
@@ -1033,7 +1059,7 @@ class GameData {
       tier: 1,
     ),
     GameEntity(
-      id: 3048,
+      id: 3050,
       assetName: 'boots',
       en: 'Boots (Dire Hit)',
       ru: 'Сапоги (Острый Удар)',
